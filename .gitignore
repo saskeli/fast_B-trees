@@ -36,6 +36,15 @@
 *.exe
 *.out
 *.app
+test/test
+test/cover
+bf_testing
 
 # debug information files
 *.dwo
+
+# IDE stuff
+.vscode
+
+# Code test coverage
+coverage/
