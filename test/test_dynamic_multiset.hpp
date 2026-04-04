@@ -14,7 +14,7 @@ TEST(DynamicMultiSet, FewInserts) {
   ASSERT_EQ(*a++, 5);
   ASSERT_EQ(*a++, 17);
   ASSERT_EQ(a, set.end());
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), 3u);
   ASSERT_TRUE(set.contains(5));
   ASSERT_TRUE(set.contains(17));
   ASSERT_FALSE(set.contains(1337));
@@ -25,7 +25,7 @@ TEST(DynamicMultiSet, SingleRemove) {
   set.insert(6);
   set.insert(6);
   set.remove(6);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.size(), 1u);
   ASSERT_EQ(*set.begin(), 6);
   ASSERT_TRUE(set.contains(6));
 }
@@ -46,8 +46,8 @@ TEST(DynamicMultiSet, FP) {
     set.insert(v);
   }
 
-  ASSERT_EQ(set.size(), 11);
-  ASSERT_EQ(set.count(dv), 3);
+  ASSERT_EQ(set.size(), 11u);
+  ASSERT_EQ(set.count(dv), 3u);
 
   ASSERT_EQ(*set.predecessor(dv), dv);
   ASSERT_EQ(*set.predecessor(mv), mv);
@@ -63,8 +63,8 @@ TEST(DynamicMultiSet, Small) {
     set.insert(i * 5);
     set.insert(21);
   }
-  ASSERT_EQ(set.count(21), 100);
+  ASSERT_EQ(set.count(21), 100u);
   ASSERT_EQ(*set.predecessor(23), 21);
-  ASSERT_EQ(set.count(700), 0);
-  ASSERT_EQ(set.count(5), 1);
+  ASSERT_EQ(set.count(700), 0u);
+  ASSERT_EQ(set.count(5), 1u);
 }

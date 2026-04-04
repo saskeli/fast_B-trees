@@ -12,7 +12,7 @@ TEST(StaticSet, Empty) {
   bt::static_set set(vec);
   auto e = set.end();
   ASSERT_EQ(set.begin(), e);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), size_t(0));
 
   ASSERT_FALSE(set.contains(0));
   ASSERT_EQ(set.predecessor(0), e);
@@ -35,7 +35,7 @@ TEST(StaticSet, Tiny) {
   std::vector<int> vec = {3, 1, 4};
   bt::static_set set(vec);
   auto e = set.end();
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), size_t(3));
 
   ASSERT_FALSE(set.contains(0));
   ASSERT_EQ(set.predecessor(0), e);
@@ -78,8 +78,8 @@ TEST(StaticSet, Small) {
   std::vector<int> vec = {1, 3, 4, 5, 5, 5, 5, 5, 6, 7, 8};
   bt::static_set set(vec);
   auto e = set.end();
-  ASSERT_EQ(set.size(), 11);
-  ASSERT_EQ(set.count(5), 5);
+  ASSERT_EQ(set.size(), size_t(11));
+  ASSERT_EQ(set.count(5), size_t(5));
 
   ASSERT_FALSE(set.contains(0));
   ASSERT_EQ(set.predecessor(0), e);
@@ -113,7 +113,7 @@ TEST(StaticSet, Medium) {
     ASSERT_EQ(set.contains(i), std::binary_search(vec.begin(), vec.end(), i));
   }
   auto e = set.end();
-  ASSERT_EQ(set.size(), 100);
+  ASSERT_EQ(set.size(), size_t(100));
 
   for (int i = 0; i < 100; ++i) {
     int next = i + 1;
@@ -145,8 +145,8 @@ TEST(StaticSet, MaxV) {
   int mv = std::numeric_limits<int>::max();
   std::vector<int> vec = {1, 2, 100, mv, mv};
   bt::static_set set(vec);
-  ASSERT_EQ(set.count(mv), 2);
-  ASSERT_EQ(set.size(), 5);
+  ASSERT_EQ(set.count(mv), size_t(2));
+  ASSERT_EQ(set.size(), size_t(5));
   ASSERT_TRUE(set.contains(mv));
   ASSERT_EQ(*set.predecessor(mv), mv);
   ASSERT_EQ(*set.lower_bound(mv), mv);
@@ -168,8 +168,8 @@ TEST(StaticSet, FP) {
   bt::static_set t_set(vec);
   bt::static_set set = t_set;
 
-  ASSERT_EQ(set.size(), 11);
-  ASSERT_EQ(set.count(dv), 3);
+  ASSERT_EQ(set.size(), size_t(11));
+  ASSERT_EQ(set.count(dv), size_t(3));
 
   ASSERT_EQ(*set.predecessor(dv), dv);
   ASSERT_EQ(*set.predecessor(mv), mv);

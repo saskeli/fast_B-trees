@@ -1,3 +1,5 @@
+CFLAGS=-march=native -std=c++23 -Wall -Wextra -Wshadow -pedantic
+
 HEADERS=include/static_search.hpp include/internal.hpp include/dynamic_search.hpp
 
 TEST_HEADERS=test/test.cpp test/test_static_set.hpp test/test_static_map.hpp \
@@ -9,13 +11,13 @@ CL=$(shell getconf LEVEL1_DCACHE_LINESIZE)
 .PHONY: test cover
 
 bf_testing: bf_testing.cpp $(HEADERS) test/util.hpp
-	g++ -std=c++23 -Ofast -DCACHE_LINE=$(CL) bf_testing.cpp -o bf_testing
+	g++ $(CFLAGS) -Ofast -DCACHE_LINE=$(CL) bf_testing.cpp -o bf_testing
 
 test/test: googletest/build/lib/libgtest_main.a $(TEST_HEADERS)
-	g++ -std=c++23 -g -DCACHE_LINE=$(CL) test/test.cpp -o test/test -lgtest_main -lgtest
+	g++ $(CFLAGS) -g -DCACHE_LINE=$(CL) test/test.cpp -o test/test -lgtest_main -lgtest
 
 test/cover: googletest/build/lib/libgtest_main.a $(TEST_HEADERS)
-	g++ -std=c++23 --coverage -O0 -g -DCACHE_LINE=$(CL) test/test.cpp -o test/cover -lgtest_main -lgtest
+	g++ $(CFLAGS) --coverage -O0 -g -DCACHE_LINE=$(CL) test/test.cpp -o test/cover -lgtest_main -lgtest
 
 test: test/test
 	test/test $(ARG)

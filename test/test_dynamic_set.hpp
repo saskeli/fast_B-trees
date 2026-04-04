@@ -11,7 +11,7 @@ TEST(DynamicSet, Empty) {
   auto b = set.begin();
   auto e = set.end();
   ASSERT_EQ(b, e);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), 0u);
   ASSERT_TRUE(set.empty());
 
   ASSERT_FALSE(set.remove(121));
@@ -40,7 +40,7 @@ TEST(DynamicSet, SingleInsert) {
   ASSERT_EQ(*b, 5);
   ++b;
   ASSERT_EQ(b, set.end());
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.size(), 1u);
   ASSERT_TRUE(set.contains(5));
   ASSERT_FALSE(set.contains(1));
 }
@@ -50,7 +50,7 @@ TEST(DynamicSet, FewInserts) {
   set.insert(5);
   set.insert(17);
   set.insert(5);
-  ASSERT_EQ(set.size(), 2);
+  ASSERT_EQ(set.size(), 2u);
   auto a = set.begin();
   ASSERT_EQ(*a, 5);
   a++;
@@ -67,7 +67,7 @@ TEST(DynamicSet, SingleRemove) {
   bt::dynamic_set<int> set;
   set.insert(6);
   set.remove(6);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), 0u);
   ASSERT_EQ(set.begin(), set.end());
   ASSERT_FALSE(set.contains(6));
 }
@@ -78,7 +78,7 @@ TEST(DynamicSet, Tiny) {
   set.insert(1);
   set.insert(4);
   auto e = set.end();
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), 3u);
   ASSERT_FALSE(set.remove(121));
 
   ASSERT_FALSE(set.contains(0));
@@ -142,10 +142,10 @@ TEST(DynamicSet, Small) {
     ASSERT_EQ(v, vec[i++]);
   }
 
-  for (uint64_t i = 0; i < 50; ++i) {
+  for (i = 0; i < 50; ++i) {
     set.remove(s_vec[i]);
   }
-  ASSERT_EQ(set.size(), 50);
+  ASSERT_EQ(set.size(), 50u);
   std::sort(s_vec.data() + 50, s_vec.data() + 100);
   i = 50;
   for (auto v : set) {
@@ -160,7 +160,7 @@ TEST(DynamicSet, MediumOrdered) {
     set.insert(i);
   }
 
-  ASSERT_EQ(set.size(), 5000);
+  ASSERT_EQ(set.size(), 5000u);
   for (i = 0; i < 5000; ++i) {
     ASSERT_TRUE(set.contains(i)) << i;
   }
@@ -172,7 +172,7 @@ TEST(DynamicSet, MediumOrdered) {
 
   for (i = 0; i < 2500; ++i) {
     ASSERT_TRUE(set.remove(i)) << i;
-    ASSERT_EQ(set.size(), 5000 - i - 1);
+    ASSERT_EQ(set.size(), size_t(5000 - i - 1));
   }
   i = 2500;
   for (auto v : set) {
@@ -199,7 +199,7 @@ TEST(DynamicSet, MediumReversed) {
 
   for (i = n / 2; i > 0; --i) {
     ASSERT_TRUE(set.remove(i)) << i;
-    ASSERT_EQ(set.size(), n / 2 - 1 + i);
+    ASSERT_EQ(set.size(), size_t(n / 2 - 1 + i));
   }
   i = n / 2 + 1;
   for (auto v : set) {
@@ -236,7 +236,7 @@ TEST(DynamicSet, MediumRandom) {
 
   for (i = 0; i < n / 2; ++i) {
     ASSERT_TRUE(set.remove(s_vec[i])) << i;
-    ASSERT_EQ(set.size(), n - 1 - i);
+    ASSERT_EQ(set.size(), size_t(n - 1 - i));
   }
 
   std::sort(s_vec.data() + (n / 2), s_vec.data() + s_vec.size());
@@ -272,7 +272,7 @@ TEST(DynamicSet, SufficientOrdered) {
 
   for (i = 0; i < n / 2; ++i) {
     ASSERT_TRUE(set.remove(i)) << i;
-    ASSERT_EQ(set.size(), n - i - 1);
+    ASSERT_EQ(set.size(), size_t(n - i - 1));
   }
   i = n / 2;
   for (auto v : set) {
@@ -299,7 +299,7 @@ TEST(DynamicSet, SufficientReversed) {
 
   for (i = n / 2; i > 0; --i) {
     ASSERT_TRUE(set.remove(i)) << i;
-    ASSERT_EQ(set.size(), n / 2 - 1 + i);
+    ASSERT_EQ(set.size(), size_t(n / 2 - 1 + i));
   }
   i = n / 2 + 1;
   for (auto v : set) {
@@ -336,7 +336,7 @@ TEST(DynamicSet, SufficientRandom) {
 
   for (i = 0; i < n / 2; ++i) {
     ASSERT_TRUE(set.remove(s_vec[i])) << i;
-    ASSERT_EQ(set.size(), n - 1 - i);
+    ASSERT_EQ(set.size(), size_t(n - 1 - i));
   }
 
   std::sort(s_vec.data() + (n / 2), s_vec.data() + s_vec.size());
@@ -358,7 +358,7 @@ TEST(DynamicSet, MaxVal) {
   for (i = 1; i <= 500; ++i) {
     set.insert(i);
   }
-  ASSERT_EQ(set.size(), 500);
+  ASSERT_EQ(set.size(), 500u);
 
   for (i = 1; i < 500; ++i) {
     ASSERT_TRUE(set.contains(i));
@@ -386,8 +386,8 @@ TEST(DynamicSet, FP) {
     set.insert(v);
   }
 
-  ASSERT_EQ(set.size(), 7);
-  ASSERT_EQ(set.count(dv), 1);
+  ASSERT_EQ(set.size(), 7u);
+  ASSERT_EQ(set.count(dv), 1u);
 
   ASSERT_EQ(*set.predecessor(dv), dv);
   ASSERT_EQ(*set.predecessor(mv), mv);

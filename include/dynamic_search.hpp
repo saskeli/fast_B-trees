@@ -88,7 +88,6 @@ class dynamic_tree {
     void merge(uint16_t idx, const T& mv) {
       if constexpr (child_is_leaf) {
         leaf_t* m_leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
-        uint16_t m_size = m_leaf->size();
         leaf_t* l_leaf = nullptr;
         uint16_t l_size = 0;
         if (idx > 0) {
@@ -448,7 +447,6 @@ class dynamic_tree {
         return false;
       }
       leaf_t* m_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[idx]);
-      uint16_t m_size = m_leaf->size();
       uint16_t r_size = 0;
       leaf_t* r_leaf = nullptr;
       if (idx + 1 < block_size && root->child_pointers[idx + 1] != nullptr) {
@@ -687,32 +685,30 @@ class dynamic_tree {
       }
     }
     node* i_nd = reinterpret_cast<node*>(nd);
-    leaf_t* leaf;
-    for (uint16_t i = 0; i < levels_; ++i) {
-      auto idx = i_nd->find(v, max_value_);
+    uint16_t idx;
+    for (uint16_t i = 1; i < levels_; ++i) {
+      idx = i_nd->find(v, max_value_);
       void* c_nd = i_nd->child_pointers[idx];
-      if (i + 1 < levels_) {
-        node* child_node = reinterpret_cast<node*>(c_nd);
-        if (child_node->is_full()) {
-          i_nd->template split_child<false>(idx, max_value_);
-          idx = i_nd->find(v, max_value_);
-          child_node = reinterpret_cast<node*>(i_nd->child_pointers[idx]);
-        }
-        if (i_nd->items[idx] > v) {
-          i_nd->items[idx] = v;
-        }
-        i_nd = child_node;
-      } else {
-        leaf = reinterpret_cast<leaf_t*>(c_nd);
-        if (leaf->is_full()) {
-          i_nd->template split_child<true>(idx, max_value_);
-          idx = i_nd->find(v, max_value_);
-          leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
-        }
-        if (i_nd->items[idx] > v) {
-          i_nd->items[idx] = v;
-        }
+      node* child_node = reinterpret_cast<node*>(c_nd);
+      if (child_node->is_full()) {
+        i_nd->template split_child<false>(idx, max_value_);
+        idx = i_nd->find(v, max_value_);
+        child_node = reinterpret_cast<node*>(i_nd->child_pointers[idx]);
       }
+      if (i_nd->items[idx] > v) {
+        i_nd->items[idx] = v;
+      }
+      i_nd = child_node;
+    }
+    idx = i_nd->find(v, max_value_);
+    leaf_t* leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
+    if (leaf->is_full()) {
+      i_nd->template split_child<true>(idx, max_value_);
+      idx = i_nd->find(v, max_value_);
+      leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
+    }
+    if (i_nd->items[idx] > v) {
+      i_nd->items[idx] = v;
     }
     return leaf->insert(v, max_value_);
   }
@@ -767,9 +763,7 @@ class dynamic_set {
     typedef T* insert_return_t;
     typedef T find_return_t;
     typedef T iter_deref_t;
-    const static constexpr bool leaf_allows_duplicates() {
-      return allow_duplicates;
-    }
+    static constexpr bool leaf_allows_duplicates() { return allow_duplicates; }
     std::array<T, block_size> items;
 
     leaf(const T& mv) : size_(0) { items.fill(mv); }
@@ -966,9 +960,7 @@ class dynamic_map {
     typedef V* insert_return_t;
     typedef std::pair<K, V> find_return_t;
     typedef std::pair<K, V> iter_deref_t;
-    const static constexpr bool leaf_allows_duplicates() {
-      return allow_duplicates;
-    }
+    static constexpr bool leaf_allows_duplicates() { return allow_duplicates; }
     std::array<K, block_size> items;
     std::array<V, block_size> values;
 

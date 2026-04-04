@@ -11,7 +11,7 @@ TEST(DynamicMap, Empty) {
   bt::dynamic_map<int, float> map;
   auto e = map.end();
   ASSERT_EQ(map.begin(), e);
-  ASSERT_EQ(map.size(), 0);
+  ASSERT_EQ(map.size(), 0u);
   ASSERT_TRUE(map.empty());
 
   ASSERT_THROW(map.at(12), std::out_of_range);
@@ -45,7 +45,7 @@ TEST(DynamicMap, Tiny) {
 
   auto e = map.end();
 
-  ASSERT_EQ(map.size(), 3);
+  ASSERT_EQ(map.size(), 3u);
 
   auto a = map.begin();
   std::pair<int, char> p = {1, 5};
@@ -113,7 +113,7 @@ TEST(DynamicMap, Medium) {
               std::binary_search(k_vec.begin(), k_vec.end(), i));
   }
   auto e = map.end();
-  ASSERT_EQ(map.size(), 100);
+  ASSERT_EQ(map.size(), 100u);
 
   std::pair<int, unsigned int> p;
   for (int i = 0; i < 100; ++i) {
@@ -156,7 +156,7 @@ TEST(DynamicMultiMap, Tiny) {
     map.insert(k_vec[i], v_vec[i]);
   }
   auto e = map.end();
-  ASSERT_EQ(map.size(), 11);
+  ASSERT_EQ(map.size(), 11u);
 
   auto b = map.begin();
   auto a = map.begin();
@@ -174,7 +174,7 @@ TEST(DynamicMultiMap, Tiny) {
   }
   ASSERT_EQ(a, e);
 
-  ASSERT_EQ(map.count(5), 5);
+  ASSERT_EQ(map.count(5), 5u);
 
   ASSERT_FALSE(map.contains_key(0));
   ASSERT_EQ(map.predecessor(0), e);
@@ -213,12 +213,12 @@ TEST(DynamicMultiMap, MaxV) {
     map.insert(p);
   }
 
-  ASSERT_EQ(map.count(mv), 2);
+  ASSERT_EQ(map.count(mv), 2u);
 
-  ASSERT_EQ(map.upper_bound(mv) - map.lower_bound(mv), 2);
+  ASSERT_EQ(map.upper_bound(mv) - map.lower_bound(mv), 2u);
   ASSERT_EQ(map.lower_bound(mv) + 2, map.upper_bound(mv));
 
-  ASSERT_EQ(map.size(), 5);
+  ASSERT_EQ(map.size(), 5u);
   ASSERT_TRUE(map.contains_key(mv));
   std::pair<int, char> p = {mv, 'e'};
   ASSERT_EQ(*map.predecessor(mv), p);
@@ -240,7 +240,7 @@ TEST(DynamicMultiMap, Medium) {
   }
   map.insert('b', 12);
 
-  ASSERT_EQ(map.count('a'), 200);
+  ASSERT_EQ(map.count('a'), 200u);
   ASSERT_EQ(map.at('b'), 12);
 
   ASSERT_THROW(map.at('d'), std::out_of_range);
@@ -251,7 +251,7 @@ TEST(DynamicMultiMap, Medium) {
   ASSERT_FALSE(map.remove('a'));
   ASSERT_TRUE(map.remove('c'));
 
-  ASSERT_EQ(map.size(), 600);
+  ASSERT_EQ(map.size(), 600u);
 
   for (int i = 0; i < 200; ++i) {
     ASSERT_TRUE(map.remove('e'));
@@ -291,7 +291,7 @@ TEST(DynamicMap, SufficientRandom) {
 
   for (i = 0; i < n / 2; ++i) {
     ASSERT_TRUE(set.remove(s_vec[i].first)) << i;
-    ASSERT_EQ(set.size(), n - 1 - i);
+    ASSERT_EQ(set.size(), size_t(n - 1 - i));
   }
 
   std::sort(s_vec.data() + (n / 2), s_vec.data() + s_vec.size());
@@ -306,4 +306,3 @@ TEST(DynamicMap, SufficientRandom) {
     ASSERT_TRUE(set.contains_key(ptr[i].first));
   }
 }
-

@@ -12,7 +12,7 @@ TEST(StaticMap, Empty) {
   bt::static_map map(vec);
   auto e = map.end();
   ASSERT_EQ(map.begin(), e);
-  ASSERT_EQ(map.size(), 0);
+  ASSERT_EQ(map.size(), 0u);
 
   ASSERT_FALSE(map.contains_key(0));
   ASSERT_EQ(map.predecessor(0), e);
@@ -36,7 +36,7 @@ TEST(StaticMap, Tiny) {
   bt::static_map map(vec);
   auto e = map.end();
 
-  ASSERT_EQ(map.size(), 3);
+  ASSERT_EQ(map.size(), 3u);
 
   auto a = map.begin();
   std::pair<int, int> p = {1, 5};
@@ -94,7 +94,7 @@ TEST(StaticMap, Small) {
   std::vector<int> v_vec = {12, 11, 10, 9, 8, 7, 6, 5, 4, 2, 3};
   bt::static_map map(k_vec, v_vec);
   auto e = map.end();
-  ASSERT_EQ(map.size(), 11);
+  ASSERT_EQ(map.size(), 11u);
 
   auto b = map.begin();
   auto a = map.begin();
@@ -112,7 +112,7 @@ TEST(StaticMap, Small) {
   }
   ASSERT_EQ(a, e);
 
-  ASSERT_EQ(map.count(5), 5);
+  ASSERT_EQ(map.count(5), 5u);
 
   ASSERT_FALSE(map.contains_key(0));
   ASSERT_EQ(map.predecessor(0), e);
@@ -154,7 +154,7 @@ TEST(StaticMap, Medium) {
               std::binary_search(k_vec.begin(), k_vec.end(), i));
   }
   auto e = map.end();
-  ASSERT_EQ(map.size(), 100);
+  ASSERT_EQ(map.size(), 100u);
 
   std::pair<int, unsigned int> p;
   for (int i = 0; i < 100; ++i) {
@@ -192,13 +192,13 @@ TEST(StaticMap, MaxV) {
   int mv = std::numeric_limits<int>::max();
   std::vector<std::pair<int, char>> vec = {{1, 'a'}, {2, 'b'}, {100, 'c'}, {mv, 'd'}, {mv, 'e'}};
   bt::static_map map(vec.data(), vec.size(), mv);
-  ASSERT_EQ(map.count(mv), 2);
+  ASSERT_EQ(map.count(mv), 2u);
 
   ASSERT_EQ(map.upper_bound(mv) - map.lower_bound(mv), 2);
   ASSERT_EQ(map.lower_bound(mv) + 2, map.upper_bound(mv));
   ASSERT_EQ(map.upper_bound(mv) - 2, map.lower_bound(mv));
 
-  ASSERT_EQ(map.size(), 5);
+  ASSERT_EQ(map.size(), 5u);
   ASSERT_TRUE(map.contains_key(mv));
   std::pair<int, char> p = {mv, 'e'};
   ASSERT_EQ(*map.predecessor(mv), p);

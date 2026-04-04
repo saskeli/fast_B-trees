@@ -194,7 +194,6 @@ class static_set {
           __builtin_prefetch(byte_data + c_idx);
         }
       }
-      uint16_t res = nodes_[n_idx].find(q);
       n_idx = n_idx * block_size + 1 + nodes_[n_idx].find(q);
     }
     return nodes_[n_idx].elements.at(nodes_[n_idx].find(q)) == q;
@@ -352,7 +351,7 @@ class static_map {
       if (data[i - 1].first > data[i].first) {
         std::vector<std::pair<K, V>> i_vec(data, data + n);
         auto sorted_k = sort_and_flip(i_vec, values_);
-        set_ = {sorted_k};
+        set_ = {sorted_k, max_value};
         return;
       }
     }
@@ -361,7 +360,7 @@ class static_map {
       k_vec.push_back(data[i].first);
       values_[i] = data[i].second;
     }
-    set_ = {k_vec};
+    set_ = {k_vec, max_value};
   }
 
   static_map(const std::pair<K, V>* data, size_t n)
