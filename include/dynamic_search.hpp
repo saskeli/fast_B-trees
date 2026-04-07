@@ -285,7 +285,7 @@ class dynamic_tree {
 
     bt_iterator& operator++() {
       ++current_idx_;
-      if (current_idx_ < current_leaf_->size()) {
+      if (current_idx_ < current_leaf_->size()) [[likely]] {
         return *this;
       }
       current_leaf_ = nullptr;
@@ -628,12 +628,12 @@ class dynamic_tree {
   }
 
   bt_iterator predecessor(const T& v) const {
-    std::vector<std::pair<const node*, uint16_t>> node_stack;
+    std::vector<std::pair<const node*, uint16_t>> node_stack(levels_);
     const void* nd = root_;
     for (uint16_t i = 0; i < levels_; ++i) {
       const node* n_nd = reinterpret_cast<const node*>(nd);
       auto idx = n_nd->find(v, max_value_);
-      node_stack.push_back({n_nd, idx});
+      node_stack[i] = {n_nd, idx};
       nd = n_nd->child_pointers[idx];
     }
     const leaf_t* leaf = reinterpret_cast<const leaf_t*>(nd);
@@ -641,7 +641,7 @@ class dynamic_tree {
     if (leaf->items[idx] > v) {
       return end();
     }
-    return {node_stack, leaf, idx, levels_};
+    return {std::move(node_stack), leaf, idx, levels_};
   }
 
   bt_iterator lower_bound(const T& q) const {
