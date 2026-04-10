@@ -109,4 +109,9 @@ constexpr T max_val() {
   }
   return std::numeric_limits<T>::max();
 }
+
+template <uint64_t block_size>
+constexpr uint16_t max_levels() {
+  return 64 / __builtin_ctz(block_size);
+}
 }  // namespace bt::internal

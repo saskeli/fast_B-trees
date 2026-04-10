@@ -237,51 +237,41 @@ class dynamic_tree {
   };
 
   class bt_iterator {
-    std::vector<std::pair<const node*, uint16_t>> node_stack_;
+   public:
+    std::array<const node*, internal::max_levels<block_size>()> node_stack_;
+    std::array<uint16_t, internal::max_levels<block_size>()> idx_stack_;
     const leaf_t* current_leaf_;
     uint16_t current_idx_;
     uint16_t levels_;
 
-   public:
     bt_iterator(const bt_iterator& other)
         : node_stack_(other.node_stack_),
+          idx_stack_(other.idx_stack_),
           current_leaf_(other.current_leaf_),
           current_idx_(other.current_idx_),
           levels_(other.levels_) {}
 
+    bt_iterator(uint16_t levels) : levels_(levels) {}
+
     bt_iterator(const node* root, uint16_t levels)
-        : node_stack_(),
-          current_leaf_(nullptr),
-          current_idx_(0),
-          levels_(levels) {
+        : current_leaf_(nullptr), current_idx_(0), levels_(levels) {
       if (root == nullptr) {
         return;
       }
-      node_stack_.push_back({root, 0});
-      std::pair<const node*, uint16_t> p;
-      while (node_stack_.size() < levels_) {
-        p = node_stack_.back();
-        const node* next_node =
-            reinterpret_cast<const node*>(p.first->child_pointers[p.second]);
-        node_stack_.push_back({next_node, 0});
+      const node* nd = root;
+      for (uint16_t i = 0; i < levels_; ++i) {
+        node_stack_[i] = nd;
+        idx_stack_[i] = 0;
+        nd = reinterpret_cast<const node*>(nd->child_pointers[0]);
       }
-      p = node_stack_.back();
-      current_leaf_ =
-          reinterpret_cast<const leaf_t*>(p.first->child_pointers[p.second]);
+      current_leaf_ = reinterpret_cast<const leaf_t*>(nd);
       current_idx_ = 0;
     }
 
     bt_iterator(const leaf_t* leaf)
-        : node_stack_(), current_leaf_(leaf), current_idx_(0), levels_(0) {
+        : current_leaf_(leaf), current_idx_(0), levels_(0) {
       return;
     }
-
-    bt_iterator(std::vector<std::pair<const node*, uint16_t>> node_stack,
-                const leaf_t* leaf, uint16_t leaf_index, uint16_t levels)
-        : node_stack_(node_stack),
-          current_leaf_(leaf),
-          current_idx_(leaf_index),
-          levels_(levels) {}
 
     bt_iterator& operator++() {
       ++current_idx_;
@@ -290,61 +280,61 @@ class dynamic_tree {
       }
       current_leaf_ = nullptr;
       current_idx_ = 0;
-      std::pair<const node*, uint16_t> p;
-      while (node_stack_.size() > 0) {
-        p = node_stack_.back();
-        node_stack_.pop_back();
-        uint16_t idx = p.second + 1;
-        if (idx < block_size && p.first->child_pointers[idx] != nullptr) {
-          node_stack_.push_back({p.first, idx});
+      uint16_t local_idx = levels_ - 1;
+      for (; local_idx < levels_; --local_idx) {
+        uint16_t idx = idx_stack_[local_idx] + 1;
+        if (idx < block_size &&
+            node_stack_[local_idx]->child_pointers[idx] != nullptr) {
+          idx_stack_[local_idx] = idx;
           break;
         }
       }
-      if (node_stack_.empty()) {
+      if (local_idx > levels_) {
         return *this;
       }
-      while (node_stack_.size() < levels_) {
-        p = node_stack_.back();
-        const node* next_node =
-            reinterpret_cast<const node*>(p.first->child_pointers[p.second]);
-        node_stack_.push_back({next_node, 0});
+      for (++local_idx; local_idx < levels_; ++local_idx) {
+        const node* next_node = reinterpret_cast<const node*>(
+            node_stack_[local_idx - 1]
+                ->child_pointers[idx_stack_[local_idx - 1]]);
+        node_stack_[local_idx] = next_node;
+        idx_stack_[local_idx] = 0;
       }
-      p = node_stack_.back();
-      current_leaf_ =
-          reinterpret_cast<const leaf_t*>(p.first->child_pointers[p.second]);
+      --local_idx;
+      current_leaf_ = reinterpret_cast<const leaf_t*>(
+          node_stack_[local_idx]->child_pointers[idx_stack_[local_idx]]);
       current_idx_ = 0;
       return *this;
     }
 
     bt_iterator& operator--() {
       --current_idx_;
-      if (current_idx_ < current_leaf_->size()) {
+      if (current_idx_ < block_size) {
         return *this;
       }
       current_leaf_ = nullptr;
       current_idx_ = 0;
-      std::pair<const node*, uint16_t> p;
-      while (node_stack_.size() > 0) {
-        p = node_stack_.back();
-        node_stack_.pop_back();
-        uint16_t idx = p.second - 1;
+      uint16_t local_idx = levels_ - 1;
+      for (; local_idx < levels_; --local_idx) {
+        uint16_t idx = idx_stack_[local_idx] - 1;
         if (idx < block_size) {
-          node_stack_.push_back({p.first, idx});
+          idx_stack_[local_idx] = idx;
           break;
         }
       }
-      if (node_stack_.empty()) {
+      if (local_idx > levels_) {
         return *this;
       }
-      while (node_stack_.size() < levels_) {
-        p = node_stack_.back();
-        const node* next_node =
-            reinterpret_cast<const node*>(p.first->child_pointers[p.second]);
-        node_stack_.push_back({next_node, next_node->size() - 1});
+      for (++local_idx; local_idx < levels_; ++local_idx) {
+        const node* next_node = reinterpret_cast<const node*>(
+            node_stack_[local_idx - 1]
+                ->child_pointers[idx_stack_[local_idx - 1]]);
+        node_stack_[local_idx] = next_node;
+        idx_stack_[local_idx] = next_node->size() - 1;
       }
-      p = node_stack_.back();
-      current_leaf_ =
-          reinterpret_cast<const leaf_t*>(p.first->child_pointers[p.second]);
+      --local_idx;
+      current_leaf_ = reinterpret_cast<const leaf_t*>(
+          node_stack_[local_idx]
+              ->child_pointers[idx_stack_[local_idx]]);
       current_idx_ = current_leaf_->size() - 1;
       return *this;
     }
@@ -628,12 +618,14 @@ class dynamic_tree {
   }
 
   bt_iterator predecessor(const T& v) const {
-    std::vector<std::pair<const node*, uint16_t>> node_stack(levels_);
+    bt_iterator ret(levels_);
+    // std::vector<std::pair<const node*, uint16_t>> node_stack(levels_);
     const void* nd = root_;
     for (uint16_t i = 0; i < levels_; ++i) {
       const node* n_nd = reinterpret_cast<const node*>(nd);
       auto idx = n_nd->find(v, max_value_);
-      node_stack[i] = {n_nd, idx};
+      ret.node_stack_[i] = n_nd;
+      ret.idx_stack_[i] = idx;
       nd = n_nd->child_pointers[idx];
     }
     const leaf_t* leaf = reinterpret_cast<const leaf_t*>(nd);
@@ -641,7 +633,9 @@ class dynamic_tree {
     if (leaf->items[idx] > v) {
       return end();
     }
-    return {std::move(node_stack), leaf, idx, levels_};
+    ret.current_leaf_ = leaf;
+    ret.current_idx_ = idx;
+    return ret;
   }
 
   bt_iterator lower_bound(const T& q) const {
