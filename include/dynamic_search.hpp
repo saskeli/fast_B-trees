@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 #include "internal.hpp"
@@ -63,109 +65,16 @@ class dynamic_tree {
 
     template <bool child_is_leaf>
     void split_child(uint16_t idx, const T& mv) {
-      if constexpr (child_is_leaf) {
-        leaf_t* old_leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
-        leaf_t* new_leaf = old_leaf->split(mv);
-        for (uint16_t i = block_size - 1; i > idx + 1; --i) {
-          items[i] = items[i - 1];
-          child_pointers[i] = child_pointers[i - 1];
-        }
-        items[idx + 1] = new_leaf->items[0];
-        child_pointers[idx + 1] = new_leaf;
-      } else {
-        node* old_node = reinterpret_cast<node*>(child_pointers[idx]);
-        node* new_node = old_node->split(mv);
-        for (uint16_t i = block_size - 1; i > idx + 1; --i) {
-          items[i] = items[i - 1];
-          child_pointers[i] = child_pointers[i - 1];
-        }
-        items[idx + 1] = new_node->items[0];
-        child_pointers[idx + 1] = new_node;
+      typedef
+          typename std::conditional<child_is_leaf, leaf_t, node>::type child_t;
+      child_t* old_leaf = reinterpret_cast<child_t*>(child_pointers[idx]);
+      child_t* new_leaf = old_leaf->split(mv);
+      for (uint16_t i = block_size - 1; i > idx + 1; --i) {
+        items[i] = items[i - 1];
+        child_pointers[i] = child_pointers[i - 1];
       }
-    }
-
-    template <bool child_is_leaf>
-    void merge(uint16_t idx, const T& mv) {
-      if constexpr (child_is_leaf) {
-        leaf_t* m_leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
-        leaf_t* l_leaf = nullptr;
-        uint16_t l_size = 0;
-        if (idx > 0) {
-          l_leaf = reinterpret_cast<leaf_t*>(child_pointers[idx - 1]);
-          l_size = l_leaf->size();
-        }
-        leaf_t* r_leaf = nullptr;
-        uint16_t r_size = 0;
-        if (idx < block_size - 1 && child_pointers[idx + 1] != nullptr) {
-          r_leaf = reinterpret_cast<leaf_t*>(child_pointers[idx + 1]);
-          r_size = r_leaf->size();
-        }
-        if (l_size > r_size) {
-          if (l_size == block_size / 2) {
-            l_leaf->merge(m_leaf);
-            for (uint16_t i = idx + 1; i < block_size; ++i) {
-              items[i - 1] = items[i];
-              child_pointers[i - 1] = child_pointers[i];
-            }
-            items[block_size - 1] = mv;
-            child_pointers[block_size - 1] = nullptr;
-          } else {
-            l_leaf->balance(m_leaf);
-            items[idx] = m_leaf->items[0];
-          }
-        } else if (r_size > block_size / 2) {
-          m_leaf->balance(r_leaf);
-          items[idx + 1] = r_leaf->items[0];
-        } else {
-          m_leaf->merge(r_leaf);
-          for (uint16_t i = idx + 2; i < block_size; ++i) {
-            items[i - 1] = items[i];
-            child_pointers[i - 1] = child_pointers[i];
-          }
-          items[block_size - 1] = mv;
-          child_pointers[block_size - 1] = nullptr;
-        }
-      } else {
-        node* m_node = reinterpret_cast<node*>(child_pointers[idx]);
-        uint16_t m_size = m_node->size();
-        node* l_node = nullptr;
-        uint16_t l_size = 0;
-        if (idx > 0) {
-          l_node = reinterpret_cast<node*>(child_pointers[idx - 1]);
-          l_size = l_node->size();
-        }
-        node* r_node = nullptr;
-        uint16_t r_size = 0;
-        if (idx + 1 < block_size && child_pointers[idx + 1] != nullptr) {
-          r_node = reinterpret_cast<node*>(child_pointers[idx + 1]);
-          r_size = r_node->size();
-        }
-        if (l_size > r_size) {
-          if (l_size == block_size / 2) {
-            l_node->merge(m_node, l_size, m_size);
-            for (uint16_t i = idx + 1; i < block_size; ++i) {
-              items[i - 1] = items[i];
-              child_pointers[i - 1] = child_pointers[i];
-            }
-            items[block_size - 1] = mv;
-            child_pointers[block_size - 1] = nullptr;
-          } else {
-            l_node->balance(m_node, l_size, m_size);
-            items[idx] = m_node->items[0];
-          }
-        } else if (r_size > block_size / 2) {
-          m_node->balance(r_node, m_size, r_size);
-          items[idx + 1] = r_node->items[0];
-        } else {
-          m_node->merge(r_node, m_size, r_size);
-          for (uint16_t i = idx + 2; i < block_size; ++i) {
-            items[i - 1] = items[i];
-            child_pointers[i - 1] = child_pointers[i];
-          }
-          items[block_size - 1] = mv;
-          child_pointers[block_size - 1] = nullptr;
-        }
-      }
+      items[idx + 1] = new_leaf->items[0];
+      child_pointers[idx + 1] = new_leaf;
     }
 
     void merge(node* other, uint16_t size, uint16_t other_size) {
@@ -177,36 +86,203 @@ class dynamic_tree {
       delete (other);
     }
 
-    void balance(node* other, uint16_t size, uint16_t other_size) {
-      if (size < other_size) {
-        const T mv = items[block_size - 1];
-        uint16_t copy_count = (1 + other_size - size) / 2;
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          items[i + size] = other->items[i];
-          child_pointers[i + size] = other->child_pointers[i];
-        }
-        for (uint16_t i = 0; i < other_size - copy_count; ++i) {
-          other->items[i] = other->items[i + copy_count];
-          other->items[i + copy_count] = mv;
-          other->child_pointers[i] = other->child_pointers[i + copy_count];
-          other->child_pointers[i + copy_count] = nullptr;
+    template <bool has_leaves, bool balance_insertion>
+    void balance(uint16_t idx) {
+      typedef typename std::conditional<has_leaves, leaf_t, node>::type child_t;
+      idx += idx == 0;
+      idx -= idx == block_size - 1 || child_pointers[idx + 1] == nullptr;
+      assert(idx > 0);
+      assert(idx < block_size - 1);
+      child_t* l_child = reinterpret_cast<child_t*>(child_pointers[idx - 1]);
+      uint16_t l_size = l_child->size();
+      child_t* m_child = reinterpret_cast<child_t*>(child_pointers[idx]);
+      uint16_t m_size = m_child->size();
+      child_t* r_child = reinterpret_cast<child_t*>(child_pointers[idx + 1]);
+      uint16_t r_size = r_child->size();
+      uint16_t total = l_size + m_size + r_size;
+
+      const constexpr uint16_t split_lim = 3 * block_size - 2;
+      const constexpr uint16_t merge_lim = block_size + block_size / 2 + 2;
+      if constexpr (balance_insertion) {
+        if (total >= split_lim) {
+          child_t* new_child = new child_t(items[block_size - 1]);
+          l_child->four_way_split(l_size, m_child, m_size, r_child, r_size,
+                                  new_child, total);
+          for (uint16_t i = block_size - 1; i > idx + 2; --i) {
+            items[i] = items[i - 1];
+            child_pointers[i] = child_pointers[i - 1];
+          }
+          items[idx + 2] = new_child->items[0];
+          child_pointers[idx + 2] = new_child;
+          items[idx + 1] = r_child->items[0];
+          items[idx] = m_child->items[0];
+          assert(l_child->size() >= block_size / 2);
+          assert(l_child->size() <= block_size);
+          assert(m_child->size() >= block_size / 2);
+          assert(m_child->size() <= block_size);
+          assert(r_child->size() >= block_size / 2);
+          assert(r_child->size() <= block_size);
+          assert(new_child->size() >= block_size / 2);
+          assert(new_child->size() <= block_size);
+          return;
         }
       } else {
-        const T mv = other->items[block_size - 1];
-        uint16_t copy_count = (1 + size - other_size) / 2;
-        std::move_backward(other->items.data(),
-                           other->items.data() + other_size,
-                           other->items.data() + other_size + copy_count);
-        std::move_backward(
-            other->child_pointers.data(),
-            other->child_pointers.data() + other_size,
-            other->child_pointers.data() + other_size + copy_count);
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          other->items[i] = items[size - copy_count + i];
-          items[size - copy_count + i] = mv;
-          other->child_pointers[i] = child_pointers[size - copy_count + i];
-          child_pointers[size - copy_count + i] = nullptr;
+        if (total <= merge_lim) {
+          const T mv = l_child->items[block_size - 1];
+          l_child->three_way_merge(l_size, m_child, m_size, r_child, r_size,
+                                   total);
+          delete (r_child);
+          for (uint16_t i = idx + 1; i < block_size - 1; ++i) {
+            items[i] = items[i + 1];
+            child_pointers[i] = child_pointers[i + 1];
+          }
+          items[block_size - 1] = mv;
+          child_pointers[block_size - 1] = nullptr;
+          items[idx] = m_child->items[0];
+          assert(l_child->size() >= block_size / 2);
+          assert(l_child->size() <= block_size);
+          assert(m_child->size() >= block_size / 2);
+          assert(m_child->size() <= block_size);
+          return;
         }
+      }
+      l_child->three_way_balance(l_size, m_child, m_size, r_child, r_size,
+                                 total);
+      assert(l_child->size() >= block_size / 2);
+      assert(l_child->size() <= block_size);
+      assert(m_child->size() >= block_size / 2);
+      assert(m_child->size() <= block_size);
+      assert(r_child->size() >= block_size / 2);
+      assert(r_child->size() <= block_size);
+      items[idx] = m_child->items[0];
+      items[idx + 1] = r_child->items[0];
+    }
+
+    void four_way_split(uint16_t l_size, node* m_node, uint16_t m_size,
+                        node* r_node, uint16_t r_size, node* new_node,
+                        uint16_t total) {
+      const T mv = new_node->items[0];
+      uint16_t suf_size = total / 2;
+      uint16_t pred_size = total - suf_size;
+
+      uint16_t copy_count = suf_size / 2;
+      uint16_t offset = r_size - copy_count;
+      for (uint16_t i = 0; i < copy_count; ++i) {
+        new_node->items[i] = r_node->items[offset + i];
+        r_node->items[offset + i] = mv;
+        new_node->child_pointers[i] = r_node->child_pointers[offset + i];
+        r_node->child_pointers[offset + i] = nullptr;
+      }
+      suf_size -= copy_count;
+      r_size = offset;
+
+      copy_count = suf_size - r_size;
+      m_node->give(m_size, copy_count, r_node, r_size, mv);
+      m_size -= copy_count;
+
+      suf_size = pred_size / 2;
+      copy_count = suf_size - m_size;
+      give(l_size, copy_count, m_node, m_size, mv);
+    }
+
+    void three_way_merge(uint16_t l_size, node* m_node, uint16_t m_size,
+                         node* r_node, uint16_t r_size, uint16_t total) {
+      const T mv = items[block_size - 1];
+      uint16_t suf_size = total / 2;
+      uint16_t pref_size = total - suf_size;
+
+      uint16_t copy_count = pref_size - l_size;
+      take(l_size, copy_count, m_node, m_size, mv);
+      m_size -= copy_count;
+
+      for (uint16_t i = 0; i < r_size; ++i) {
+        m_node->items[m_size + i] = r_node->items[i];
+        r_node->items[i] = mv;
+        m_node->child_pointers[m_size + i] = r_node->child_pointers[i];
+        r_node->child_pointers[i] = nullptr;
+      }
+    }
+
+    void three_way_balance(uint16_t l_size, node* m_node, uint16_t m_size,
+                           node* r_node, uint16_t r_size, uint16_t total) {
+      const T mv = l_size < block_size
+                       ? items[block_size - 1]
+                       : (m_size < block_size ? m_node->items[block_size - 1]
+                                              : r_node->items[block_size - 1]);
+      uint16_t r_target = total / 3;
+      uint16_t m_target = (total - r_target) / 2;
+      uint16_t l_target = total - r_target - m_target;
+      if (l_size < l_target) {
+        uint16_t copy_count = l_target - l_size;
+        take(l_size, copy_count, m_node, m_size, mv);
+        m_size -= copy_count;
+        if (m_size < m_target) {
+          copy_count = m_target - m_size;
+          m_node->take(m_size, copy_count, r_node, r_size, mv);
+        } else if (m_size > m_target) {
+          copy_count = m_size - m_target;
+          m_node->give(m_size, copy_count, r_node, r_size, mv);
+        }
+      } else if (l_size > l_target) {
+        uint16_t copy_count = l_size - l_target;
+        if (block_size - m_size >= copy_count) {
+          give(l_size, copy_count, m_node, m_size, mv);
+          m_size += copy_count;
+          if (m_size > m_target) {
+            copy_count = m_size - m_target;
+            m_node->give(m_size, copy_count, r_node, r_size, mv);
+          } else if (m_size < m_target) {
+            copy_count = m_target - m_size;
+            m_node->take(m_size, copy_count, r_node, r_size, mv);
+          }
+        } else {
+          // r_node is too small. make it the target size.
+          uint16_t pre_copy = r_target - r_size;
+          m_node->give(m_size, pre_copy, r_node, r_size, mv);
+          m_size -= pre_copy;
+          give(l_size, copy_count, m_node, m_size, mv);
+        }
+      } else if (m_size < m_target) {
+        // l_node is correct size
+        uint16_t copy_count = m_target - m_size;
+        m_node->take(m_size, copy_count, r_node, r_size, mv);
+      } else {
+        // Some balancing was needed by definition. So (m_size > m_target) must
+        // hold
+        uint16_t copy_count = m_size - m_target;
+        m_node->give(m_size, copy_count, r_node, r_size, mv);
+      }
+    }
+
+    void take(uint16_t size, uint16_t elems, node* r_node, uint16_t r_size,
+              const T& mv) {
+      for (uint16_t i = 0; i < elems; ++i) {
+        items[size + i] = r_node->items[i];
+        r_node->items[i] = mv;
+        child_pointers[size + i] = r_node->child_pointers[i];
+        r_node->child_pointers[i] = nullptr;
+      }
+      r_size -= elems;
+      for (uint16_t i = 0; i < r_size; ++i) {
+        r_node->items[i] = r_node->items[elems + i];
+        r_node->items[elems + i] = mv;
+        r_node->child_pointers[i] = r_node->child_pointers[elems + i];
+        r_node->child_pointers[elems + i] = nullptr;
+      }
+    }
+
+    void give(uint16_t size, uint16_t elems, node* r_node, uint16_t r_size,
+              const T& mv) {
+      for (uint16_t i = r_size - 1; i < r_size; --i) {
+        r_node->items[elems + i] = r_node->items[i];
+        r_node->child_pointers[elems + i] = r_node->child_pointers[i];
+      }
+      size -= elems;
+      for (uint16_t i = 0; i < elems; ++i) {
+        r_node->items[i] = items[size + i];
+        items[size + i] = mv;
+        r_node->child_pointers[i] = child_pointers[size + i];
+        child_pointers[size + i] = nullptr;
       }
     }
 
@@ -215,7 +291,8 @@ class dynamic_tree {
       if (height <= 1) {
         leaf_t* leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
         if (leaf->half_empty()) {
-          merge<true>(idx, mv);
+          balance<true, false>(idx);
+          // merge<true>(idx, mv);
           idx = find(v, mv);
           leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
         }
@@ -225,7 +302,8 @@ class dynamic_tree {
       } else {
         node* child = reinterpret_cast<node*>(child_pointers[idx]);
         if (child->half_empty()) {
-          merge<false>(idx, mv);
+          balance<false, false>(idx);
+          // merge<false>(idx, mv);
           idx = find(v, mv);
           child = reinterpret_cast<node*>(child_pointers[idx]);
         }
@@ -333,8 +411,7 @@ class dynamic_tree {
       }
       --local_idx;
       current_leaf_ = reinterpret_cast<const leaf_t*>(
-          node_stack_[local_idx]
-              ->child_pointers[idx_stack_[local_idx]]);
+          node_stack_[local_idx]->child_pointers[idx_stack_[local_idx]]);
       current_idx_ = current_leaf_->size() - 1;
       return *this;
     }
@@ -391,150 +468,49 @@ class dynamic_tree {
 
   template <bool root_is_leaf>
   void split_root() {
-    if constexpr (root_is_leaf) {
-      leaf_t* old_root = reinterpret_cast<leaf_t*>(root_);
-      node* new_root = new node(max_value_);
-      root_ = new_root;
-      new_root->items[0] = old_root->items[0];
-      new_root->child_pointers[0] = old_root;
-      leaf_t* new_leaf = old_root->split(max_value_);
-      new_root->items[1] = new_leaf->items[0];
-      new_root->child_pointers[1] = new_leaf;
-      ++levels_;
-    } else {
-      node* left_node = reinterpret_cast<node*>(root_);
-      node* new_root = new node(max_value_);
-      root_ = new_root;
-      new_root->items[0] = left_node->items[0];
-      new_root->child_pointers[0] = left_node;
-      node* right_node = left_node->split(max_value_);
-      new_root->items[1] = right_node->items[0];
-      new_root->child_pointers[1] = right_node;
-      ++levels_;
-    }
+    typedef typename std::conditional<root_is_leaf, leaf_t, node>::type child_t;
+    child_t* old_root = reinterpret_cast<child_t*>(root_);
+    node* new_root = new node(max_value_);
+    root_ = new_root;
+    new_root->items[0] = old_root->items[0];
+    new_root->child_pointers[0] = old_root;
+    child_t* new_leaf = old_root->split(max_value_);
+    new_root->items[1] = new_leaf->items[0];
+    new_root->child_pointers[1] = new_leaf;
+    ++levels_;
   }
 
   template <bool child_is_leaf>
   bool merge_root(uint16_t idx) {
+    typedef
+        typename std::conditional<child_is_leaf, leaf_t, node>::type child_t;
     node* root = reinterpret_cast<node*>(root_);
-    if constexpr (child_is_leaf) {
-      if (root->child_pointers[2] == nullptr) {
-        leaf_t* a_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[0]);
-        leaf_t* b_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[1]);
-        uint16_t a_size = a_leaf->size();
-        uint16_t b_size = b_leaf->size();
-        if (a_size + b_size <= block_size) {
-          a_leaf->merge(b_leaf);
-          root->child_pointers[0] = nullptr;
-          root->child_pointers[1] = nullptr;
-          delete (root);
-          root_ = a_leaf;
-          --levels_;
-          return true;
-        }
-        a_leaf->balance(b_leaf);
-        root->items[1] = b_leaf->items[0];
-        return false;
+    if (root->child_pointers[2] == nullptr) {
+      child_t* a_child = reinterpret_cast<child_t*>(root->child_pointers[0]);
+      child_t* b_child = reinterpret_cast<child_t*>(root->child_pointers[1]);
+      uint16_t a_size = a_child->size();
+      uint16_t b_size = b_child->size();
+      if (a_size + b_size <= block_size) {
+        a_child->merge(b_child, a_size, b_size);
+        root->child_pointers[0] = nullptr;
+        root->child_pointers[1] = nullptr;
+        delete (root);
+        root_ = a_child;
+        --levels_;
+        return true;
       }
-      leaf_t* m_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[idx]);
-      uint16_t r_size = 0;
-      leaf_t* r_leaf = nullptr;
-      if (idx + 1 < block_size && root->child_pointers[idx + 1] != nullptr) {
-        r_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[idx + 1]);
-        r_size = r_leaf->size();
-      }
-      uint16_t l_size = 0;
-      leaf_t* l_leaf = nullptr;
-      if (idx > 0) {
-        l_leaf = reinterpret_cast<leaf_t*>(root->child_pointers[idx - 1]);
-        l_size = l_leaf->size();
-      }
-      if (r_size > l_size) {
-        if (r_size == block_size / 2) {
-          m_leaf->merge(r_leaf);
-          for (uint16_t i = idx + 2; i < block_size; ++i) {
-            root->items[i - 1] = root->items[i];
-            root->child_pointers[i - 1] = root->child_pointers[i];
-          }
-          root->items[block_size - 1] = max_value_;
-          root->child_pointers[block_size - 1] = nullptr;
-        } else {
-          m_leaf->balance(r_leaf);
-          root->items[idx + 1] = r_leaf->items[0];
-        }
-      } else if (l_size == block_size / 2) {
-        l_leaf->merge(m_leaf);
-        for (uint16_t i = idx + 1; i < block_size; ++i) {
-          root->items[i - 1] = root->items[i];
-          root->child_pointers[i - 1] = root->child_pointers[i];
-        }
-        root->items[block_size - 1] = max_value_;
-        root->child_pointers[block_size - 1] = nullptr;
+      if (a_size > b_size) {
+        uint16_t copy_count = (1 + a_size - b_size) / 2;
+        a_child->give(a_size, copy_count, b_child, b_size, max_value_);
       } else {
-        l_leaf->balance(m_leaf);
-        root->items[idx] = m_leaf->items[0];
+        uint16_t copy_count = (1 + b_size - a_size) / 2;
+        a_child->take(a_size, copy_count, b_child, b_size, max_value_);
       }
-      return false;
-    } else {
-      if (root->child_pointers[2] == nullptr) {
-        node* a_node = reinterpret_cast<node*>(root->child_pointers[0]);
-        node* b_node = reinterpret_cast<node*>(root->child_pointers[1]);
-        uint16_t a_size = a_node->size();
-        uint16_t b_size = b_node->size();
-        if (a_size + b_size <= block_size) {
-          a_node->merge(b_node, a_size, b_size);
-          root->child_pointers[0] = nullptr;
-          root->child_pointers[1] = nullptr;
-          delete (root);
-          root_ = a_node;
-          --levels_;
-          return true;
-        }
-        a_node->balance(b_node, a_size, b_size);
-        root->items[1] = b_node->items[0];
-        return false;
-      }
-      node* m_node = reinterpret_cast<node*>(root->child_pointers[idx]);
-      uint16_t m_size = m_node->size();
-      uint16_t r_size = 0;
-      node* r_node = nullptr;
-      if (idx + 1 < block_size && root->child_pointers[idx + 1] != nullptr) {
-        r_node = reinterpret_cast<node*>(root->child_pointers[idx + 1]);
-        r_size = r_node->size();
-      }
-      uint16_t l_size = 0;
-      node* l_node = nullptr;
-      if (idx > 0) {
-        l_node = reinterpret_cast<node*>(root->child_pointers[idx - 1]);
-        l_size = l_node->size();
-      }
-      if (r_size > l_size) {
-        if (r_size == block_size / 2) {
-          m_node->merge(r_node, m_size, r_size);
-          for (uint16_t i = idx + 2; i < block_size; ++i) {
-            root->items[i - 1] = root->items[i];
-            root->child_pointers[i - 1] = root->child_pointers[i];
-          }
-          root->items[block_size - 1] = max_value_;
-          root->child_pointers[block_size - 1] = nullptr;
-        } else {
-          m_node->balance(r_node, m_size, r_size);
-          root->items[idx + 1] = r_node->items[0];
-        }
-      } else if (l_size == block_size / 2) {
-        l_node->merge(m_node, l_size, m_size);
-        for (uint16_t i = idx + 1; i < block_size; ++i) {
-          root->items[i - 1] = root->items[i];
-          root->child_pointers[i - 1] = root->child_pointers[i];
-        }
-        root->items[block_size - 1] = max_value_;
-        root->child_pointers[block_size - 1] = nullptr;
-      } else {
-        l_node->balance(m_node, l_size, m_size);
-        root->items[idx] = m_node->items[0];
-      }
+      root->items[1] = b_child->items[0];
       return false;
     }
+    root->template balance<child_is_leaf, false>(idx);
+    return false;
   }
 
  public:
@@ -619,7 +595,6 @@ class dynamic_tree {
 
   bt_iterator predecessor(const T& v) const {
     bt_iterator ret(levels_);
-    // std::vector<std::pair<const node*, uint16_t>> node_stack(levels_);
     const void* nd = root_;
     for (uint16_t i = 0; i < levels_; ++i) {
       const node* n_nd = reinterpret_cast<const node*>(nd);
@@ -682,10 +657,13 @@ class dynamic_tree {
     uint16_t idx;
     for (uint16_t i = 1; i < levels_; ++i) {
       idx = i_nd->find(v, max_value_);
-      void* c_nd = i_nd->child_pointers[idx];
-      node* child_node = reinterpret_cast<node*>(c_nd);
+      node* child_node = reinterpret_cast<node*>(i_nd->child_pointers[idx]);
       if (child_node->is_full()) {
-        i_nd->template split_child<false>(idx, max_value_);
+        if (i == 1 && i_nd->child_pointers[2] == nullptr) [[unlikely]] {
+          i_nd->template split_child<false>(idx, max_value_);
+        } else {
+          i_nd->template balance<false, true>(idx);
+        }
         idx = i_nd->find(v, max_value_);
         child_node = reinterpret_cast<node*>(i_nd->child_pointers[idx]);
       }
@@ -697,7 +675,11 @@ class dynamic_tree {
     idx = i_nd->find(v, max_value_);
     leaf_t* leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
     if (leaf->is_full()) {
-      i_nd->template split_child<true>(idx, max_value_);
+      if (levels_ == 1 && i_nd->child_pointers[2] == nullptr) [[unlikely]] {
+        i_nd->template split_child<true>(idx, max_value_);
+      } else {
+        i_nd->template balance<true, true>(idx);
+      }
       idx = i_nd->find(v, max_value_);
       leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
     }
@@ -818,40 +800,135 @@ class dynamic_set {
       return true;
     }
 
-    void balance(leaf* other) {
-      if (size_ < other->size_) {
-        T mv = items[block_size - 1];
-        uint16_t copy_count = (1 + other->size_ - size_) / 2;
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          items[size_ + i] = other->items[i];
+    void four_way_split(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                        leaf* r_leaf, uint16_t r_size, leaf* new_leaf,
+                        uint16_t total) {
+      const T mv = new_leaf->items[0];
+      uint16_t suf_size = total / 2;
+      uint16_t pred_size = total - suf_size;
+
+      uint16_t copy_count = suf_size / 2;
+      uint16_t offset = r_size - copy_count;
+      for (uint16_t i = 0; i < copy_count; ++i) {
+        new_leaf->items[i] = r_leaf->items[offset + i];
+        r_leaf->items[offset + i] = mv;
+      }
+      new_leaf->size_ = copy_count;
+      r_leaf->size_ = offset;
+      suf_size -= copy_count;
+      r_size = offset;
+
+      copy_count = suf_size - r_size;
+      m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
+      m_size -= copy_count;
+
+      suf_size = pred_size / 2;
+      copy_count = suf_size - m_size;
+      give(l_size, copy_count, m_leaf, m_size, mv);
+    }
+
+    void three_way_merge(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                         leaf* r_leaf, uint16_t r_size, uint16_t total) {
+      const T mv = items[block_size - 1];
+      uint16_t suf_size = total / 2;
+      uint16_t pref_size = total - suf_size;
+
+      uint16_t copy_count = pref_size - l_size;
+      take(l_size, copy_count, m_leaf, m_size, mv);
+      m_size -= copy_count;
+
+      for (uint16_t i = 0; i < r_size; ++i) {
+        m_leaf->items[m_size + i] = r_leaf->items[i];
+        r_leaf->items[i] = mv;
+      }
+      m_leaf->size_ += r_size;
+    }
+
+    void three_way_balance(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                           leaf* r_leaf, uint16_t r_size, uint16_t total) {
+      const T mv = l_size < block_size
+                       ? items[block_size - 1]
+                       : (m_size < block_size ? m_leaf->items[block_size - 1]
+                                              : r_leaf->items[block_size - 1]);
+      uint16_t r_target = total / 3;
+      uint16_t m_target = (total - r_target) / 2;
+      uint16_t l_target = total - r_target - m_target;
+      if (l_size < l_target) {
+        uint16_t copy_count = l_target - l_size;
+        take(l_size, copy_count, m_leaf, m_size, mv);
+        m_size -= copy_count;
+        if (m_size < m_target) {
+          copy_count = m_target - m_size;
+          m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
+        } else if (m_size > m_target) {
+          copy_count = m_size - m_target;
+          m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
         }
-        for (uint16_t i = copy_count; i < other->size_; ++i) {
-          other->items[i - copy_count] = other->items[i];
+      } else if (l_size > l_target) {
+        uint16_t copy_count = l_size - l_target;
+        if (block_size - m_size >= copy_count) {
+          give(l_size, copy_count, m_leaf, m_size, mv);
+          m_size += copy_count;
+          if (m_size > m_target) {
+            copy_count = m_size - m_target;
+            m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
+          } else if (m_size < m_target) {
+            copy_count = m_target - m_size;
+            m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
+          }
+        } else {
+          // r_leaf is too small. make it the target size.
+          uint16_t pre_copy = r_target - r_size;
+          m_leaf->give(m_size, pre_copy, r_leaf, r_size, mv);
+          m_size -= pre_copy;
+          give(l_size, copy_count, m_leaf, m_size, mv);
         }
-        std::fill_n(other->items.data() + (other->size_ - copy_count),
-                    copy_count, mv);
-        size_ += copy_count;
-        other->size_ -= copy_count;
+      } else if (m_size < m_target) {
+        // l_leaf is correct size
+        uint16_t copy_count = m_target - m_size;
+        m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
       } else {
-        T mv = other->items[block_size - 1];
-        uint16_t copy_count = (1 + size_ - other->size_) / 2;
-        for (uint16_t i = other->size_ - 1; i < block_size; --i) {
-          other->items[i + copy_count] = other->items[i];
-        }
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          other->items[i] = items[size_ - copy_count + i];
-          items[size_ - copy_count + i] = mv;
-        }
-        size_ -= copy_count;
-        other->size_ += copy_count;
+        // Some balancing was needed by definition.
+        // So (m_size > m_target) must hold.
+        uint16_t copy_count = m_size - m_target;
+        m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
       }
     }
 
-    void merge(leaf* other) {
-      for (uint16_t i = 0; i < other->size_; ++i) {
-        items[size_ + i] = other->items[i];
+    void take(uint16_t size, uint16_t elems, leaf* r_leaf, uint16_t r_size,
+              const T& mv) {
+      for (uint16_t i = 0; i < elems; ++i) {
+        items[size + i] = r_leaf->items[i];
+        r_leaf->items[i] = mv;
       }
-      size_ += other->size_;
+      r_size -= elems;
+      for (uint16_t i = 0; i < r_size; ++i) {
+        r_leaf->items[i] = r_leaf->items[elems + i];
+        r_leaf->items[elems + i] = mv;
+      }
+      size_ = size + elems;
+      r_leaf->size_ = r_size;
+    }
+
+    void give(uint16_t size, uint16_t elems, leaf* r_leaf, uint16_t r_size,
+              const T& mv) {
+      for (uint16_t i = r_size - 1; i < r_size; --i) {
+        r_leaf->items[elems + i] = r_leaf->items[i];
+      }
+      size -= elems;
+      for (uint16_t i = 0; i < elems; ++i) {
+        r_leaf->items[i] = items[size + i];
+        items[size + i] = mv;
+      }
+      size_ = size;
+      r_leaf->size_ += elems;
+    }
+
+    void merge(leaf* other, uint16_t size, uint16_t other_size) {
+      for (uint16_t i = 0; i < other_size; ++i) {
+        items[size + i] = other->items[i];
+      }
+      size_ += other_size;
       delete (other);
     }
   };
@@ -1019,45 +1096,142 @@ class dynamic_map {
       return true;
     }
 
-    void balance(leaf* other) {
-      if (size_ < other->size_) {
-        K mv = items[block_size - 1];
-        uint16_t copy_count = (1 + other->size_ - size_) / 2;
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          items[size_ + i] = other->items[i];
-          values[size_ + i] = other->values[i];
+    void four_way_split(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                        leaf* r_leaf, uint16_t r_size, leaf* new_leaf,
+                        uint16_t total) {
+      const K mv = new_leaf->items[0];
+      uint16_t suf_size = total / 2;
+      uint16_t pred_size = total - suf_size;
+
+      uint16_t copy_count = suf_size / 2;
+      uint16_t offset = r_size - copy_count;
+      for (uint16_t i = 0; i < copy_count; ++i) {
+        new_leaf->items[i] = r_leaf->items[offset + i];
+        r_leaf->items[offset + i] = mv;
+        new_leaf->values[i] = r_leaf->values[offset + i];
+      }
+      new_leaf->size_ = copy_count;
+      r_leaf->size_ = offset;
+      suf_size -= copy_count;
+      r_size = offset;
+
+      copy_count = suf_size - r_size;
+      m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
+      m_size -= copy_count;
+
+      suf_size = pred_size / 2;
+      copy_count = suf_size - m_size;
+      give(l_size, copy_count, m_leaf, m_size, mv);
+    }
+
+    void three_way_merge(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                         leaf* r_leaf, uint16_t r_size, uint16_t total) {
+      const K mv = items[block_size - 1];
+      uint16_t suf_size = total / 2;
+      uint16_t pref_size = total - suf_size;
+
+      uint16_t copy_count = pref_size - l_size;
+      take(l_size, copy_count, m_leaf, m_size, mv);
+      m_size -= copy_count;
+
+      for (uint16_t i = 0; i < r_size; ++i) {
+        m_leaf->items[m_size + i] = r_leaf->items[i];
+        r_leaf->items[i] = mv;
+        m_leaf->values[m_size + i] = r_leaf->values[i];
+      }
+      m_leaf->size_ += r_size;
+    }
+
+    void three_way_balance(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
+                           leaf* r_leaf, uint16_t r_size, uint16_t total) {
+      const K mv = l_size < block_size
+                       ? items[block_size - 1]
+                       : (m_size < block_size ? m_leaf->items[block_size - 1]
+                                              : r_leaf->items[block_size - 1]);
+      uint16_t r_target = total / 3;
+      uint16_t m_target = (total - r_target) / 2;
+      uint16_t l_target = total - r_target - m_target;
+      if (l_size < l_target) {
+        uint16_t copy_count = l_target - l_size;
+        take(l_size, copy_count, m_leaf, m_size, mv);
+        m_size -= copy_count;
+        if (m_size < m_target) {
+          copy_count = m_target - m_size;
+          m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
+        } else if (m_size > m_target) {
+          copy_count = m_size - m_target;
+          m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
         }
-        for (uint16_t i = copy_count; i < other->size_; ++i) {
-          other->items[i - copy_count] = other->items[i];
-          other->values[i - copy_count] = other->values[i];
+      } else if (l_size > l_target) {
+        uint16_t copy_count = l_size - l_target;
+        if (block_size - m_size >= copy_count) {
+          give(l_size, copy_count, m_leaf, m_size, mv);
+          m_size += copy_count;
+          if (m_size > m_target) {
+            copy_count = m_size - m_target;
+            m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
+          } else if (m_size < m_target) {
+            copy_count = m_target - m_size;
+            m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
+          }
+        } else {
+          // r_leaf is too small. make it the target size.
+          uint16_t pre_copy = r_target - r_size;
+          m_leaf->give(m_size, pre_copy, r_leaf, r_size, mv);
+          m_size -= pre_copy;
+          give(l_size, copy_count, m_leaf, m_size, mv);
         }
-        std::fill_n(other->items.data() + (other->size_ - copy_count),
-                    copy_count, mv);
-        size_ += copy_count;
-        other->size_ -= copy_count;
+      } else if (m_size < m_target) {
+        // l_leaf is correct size
+        uint16_t copy_count = m_target - m_size;
+        m_leaf->take(m_size, copy_count, r_leaf, r_size, mv);
       } else {
-        K mv = other->items[block_size - 1];
-        uint16_t copy_count = (1 + size_ - other->size_) / 2;
-        for (uint16_t i = other->size_ - 1; i < block_size; --i) {
-          other->items[i + copy_count] = other->items[i];
-          other->values[i + copy_count] = other->values[i];
-        }
-        for (uint16_t i = 0; i < copy_count; ++i) {
-          other->items[i] = items[size_ - copy_count + i];
-          other->values[i] = values[size_ - copy_count + i];
-          items[size_ - copy_count + i] = mv;
-        }
-        size_ -= copy_count;
-        other->size_ += copy_count;
+        // Some balancing was needed by definition. So (m_size > m_target) must
+        // hold
+        uint16_t copy_count = m_size - m_target;
+        m_leaf->give(m_size, copy_count, r_leaf, r_size, mv);
       }
     }
 
-    void merge(leaf* other) {
-      for (uint16_t i = 0; i < other->size_; ++i) {
-        items[size_ + i] = other->items[i];
-        values[size_ + i] = other->values[i];
+    void take(uint16_t size, uint16_t elems, leaf* r_leaf, uint16_t r_size,
+              const K& mv) {
+      for (uint16_t i = 0; i < elems; ++i) {
+        items[size + i] = r_leaf->items[i];
+        r_leaf->items[i] = mv;
+        values[size + i] = r_leaf->values[i];
       }
-      size_ += other->size_;
+      r_size -= elems;
+      for (uint16_t i = 0; i < r_size; ++i) {
+        r_leaf->items[i] = r_leaf->items[elems + i];
+        r_leaf->items[elems + i] = mv;
+        r_leaf->values[i] = r_leaf->values[elems + i];
+      }
+      size_ += elems;
+      r_leaf->size_ -= elems;
+    }
+
+    void give(uint16_t size, uint16_t elems, leaf* r_leaf, uint16_t r_size,
+              const K& mv) {
+      for (uint16_t i = r_size - 1; i < r_size; --i) {
+        r_leaf->items[elems + i] = r_leaf->items[i];
+        r_leaf->values[elems + i] = r_leaf->values[i];
+      }
+      size -= elems;
+      for (uint16_t i = 0; i < elems; ++i) {
+        r_leaf->items[i] = items[size + i];
+        items[size + i] = mv;
+        r_leaf->values[i] = values[size + i];
+      }
+      size_ -= elems;
+      r_leaf->size_ += elems;
+    }
+
+    void merge(leaf* other, uint16_t size, uint16_t other_size) {
+      for (uint16_t i = 0; i < other_size; ++i) {
+        items[size + i] = other->items[i];
+        values[size + i] = other->values[i];
+      }
+      size_ += other_size;
       delete (other);
     }
   };

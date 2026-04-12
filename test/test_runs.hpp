@@ -30,3 +30,5 @@ TEST(Integration, AAAC) { run(10000, 504596272); }
 TEST(Integration, AAAD) { run(10000, 116668523); }
 
 TEST(Integration, AAAE) { run(100000, 1337); }
+
+TEST(Integration, AAAF) { run(10000, 255095582); }

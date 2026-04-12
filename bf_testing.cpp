@@ -15,6 +15,7 @@ int main(int argc, char const* argv[]) {
   std::random_device rd;
   for (size_t i = 1; i > 0; ++i) {
     unsigned int seed = rd();
+    std::cout << "Running " << seed << "..." << std::flush;
     run_dynamic_map<bt::dynamic_map<uint32_t, char>, std::map<uint32_t, char>>(
         n, seed);
     run_dynamic_map<bt::dynamic_multimap<uint32_t, char>,
