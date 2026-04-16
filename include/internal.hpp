@@ -15,6 +15,13 @@ index_t linear_scan_cmov(const T* arr, const T q) {
   return res - 1;
 }
 
+template <class T, uint16_t size>
+struct linear_searcher {
+  static uint16_t search(const T* arr, const T q) {
+    return linear_scan_cmov<T, uint16_t, size>(arr, q);
+  }
+};
+
 template <class T, class index_t, index_t size>
 index_t templated_cmov(const T* arr, const T q) {
   static_assert(__builtin_popcountll(size) == 1);
@@ -27,6 +34,13 @@ index_t templated_cmov(const T* arr, const T q) {
     return res + offset;
   }
 }
+
+template <class T, uint16_t size>
+struct templated_branchless_searcher {
+  static uint16_t search(const T* arr, const T q) {
+    return templated_cmov<T, uint16_t, size>(arr, q);
+  }
+};
 
 template <class T, class index_t, index_t size>
 inline index_t templated_binary(const T* arr, const T q) {
@@ -48,6 +62,13 @@ inline index_t templated_binary(const T* arr, const T q) {
   }
 }
 
+template <class T, uint16_t size>
+struct templated_searcher {
+  static uint16_t search(const T* arr, const T q) {
+    return templated_binary<T, uint16_t, size>(arr, q);
+  }
+};
+
 template <class T, class index_t, index_t size>
 index_t search(const T* arr, const T q) {
 #if defined(__aarch64__) || defined(__arm__)
@@ -66,28 +87,28 @@ index_t search(const T* arr, const T q) {
   }
 #else
   if constexpr (sizeof(T) == 1) {
-    if constexpr (size >= 512) {
-      return templated_cmov<T, index_t, size>(arr, q);
-    } else {
-      return linear_scan_cmov<T, index_t, size>(arr, q);
-    }
-  } else if constexpr (sizeof(T) <= 2) {
     if constexpr (size >= 1024) {
       return templated_cmov<T, index_t, size>(arr, q);
     } else {
       return linear_scan_cmov<T, index_t, size>(arr, q);
     }
-  } else if constexpr (sizeof(T) <= 4) {
-    if constexpr (size >= 128) {
+  } else if constexpr (sizeof(T) <= 2) {
+    if constexpr (size >= 512) {
+      return templated_cmov<T, index_t, size>(arr, q);
+    } else {
+      return linear_scan_cmov<T, index_t, size>(arr, q);
+    }
+  } else if constexpr (sizeof(T) <= 3) {
+    if constexpr (size >= 32) {
       return templated_cmov<T, index_t, size>(arr, q);
     } else {
       return linear_scan_cmov<T, index_t, size>(arr, q);
     }
   } else {
     if constexpr (size >= 32) {
-      return templated_cmov<T, index_t, size>(arr, q);
-    } else {
       return templated_binary<T, index_t, size>(arr, q);
+    } else {
+      return linear_scan_cmov<T, index_t, size>(arr, q);
     }
   }
 #endif
@@ -98,6 +119,13 @@ index_t search(const arr_t arr, typename arr_t::value_type q) {
   static_assert(std::numeric_limits<index_t>::max() >= arr.size());
   return search<typename arr_t::value_type, index_t, arr.size()>(arr.data(), q);
 }
+
+template <class T, uint16_t size>
+struct auto_search {
+  static uint16_t search(const T* arr, const T q) {
+    return bt::internal::search<T, uint16_t, size>(arr, q);
+  }
+};
 
 template <class T>
 constexpr T max_val() {

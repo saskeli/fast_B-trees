@@ -14,7 +14,7 @@
 
 namespace bt {
 namespace internal {
-template <class T, class leaf_t, uint16_t block_size>
+template <class T, class leaf_t, uint16_t block_size, class searcher = internal::auto_search<T, block_size>>
 class dynamic_tree {
   class node {
     template <uint16_t b = block_size>
@@ -43,7 +43,7 @@ class dynamic_tree {
         uint16_t s = size();
         return s > 0 ? s - 1 : s;
       }
-      return internal::search(items, q);
+      return searcher::search(items.data(), q);
     }
 
     bool is_full() const { return child_pointers[block_size - 1] != nullptr; }
@@ -87,7 +87,7 @@ class dynamic_tree {
     }
 
     template <bool has_leaves, bool balance_insertion>
-    void balance(uint16_t idx) {
+    void balance(uint16_t idx, const T mv) {
       typedef typename std::conditional<has_leaves, leaf_t, node>::type child_t;
       idx += idx == 0;
       idx -= idx == block_size - 1 || child_pointers[idx + 1] == nullptr;
@@ -107,7 +107,7 @@ class dynamic_tree {
         if (total >= split_lim) {
           child_t* new_child = new child_t(items[block_size - 1]);
           l_child->four_way_split(l_size, m_child, m_size, r_child, r_size,
-                                  new_child, total);
+                                  new_child, total, mv);
           for (uint16_t i = block_size - 1; i > idx + 2; --i) {
             items[i] = items[i - 1];
             child_pointers[i] = child_pointers[i - 1];
@@ -128,7 +128,6 @@ class dynamic_tree {
         }
       } else {
         if (total <= merge_lim) {
-          const T mv = l_child->items[block_size - 1];
           l_child->three_way_merge(l_size, m_child, m_size, r_child, r_size,
                                    total);
           delete (r_child);
@@ -160,8 +159,7 @@ class dynamic_tree {
 
     void four_way_split(uint16_t l_size, node* m_node, uint16_t m_size,
                         node* r_node, uint16_t r_size, node* new_node,
-                        uint16_t total) {
-      const T mv = new_node->items[0];
+                        uint16_t total, const T mv) {
       uint16_t suf_size = total / 2;
       uint16_t pred_size = total - suf_size;
 
@@ -291,7 +289,7 @@ class dynamic_tree {
       if (height <= 1) {
         leaf_t* leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
         if (leaf->half_empty()) {
-          balance<true, false>(idx);
+          balance<true, false>(idx, mv);
           // merge<true>(idx, mv);
           idx = find(v, mv);
           leaf = reinterpret_cast<leaf_t*>(child_pointers[idx]);
@@ -302,7 +300,7 @@ class dynamic_tree {
       } else {
         node* child = reinterpret_cast<node*>(child_pointers[idx]);
         if (child->half_empty()) {
-          balance<false, false>(idx);
+          balance<false, false>(idx, mv);
           // merge<false>(idx, mv);
           idx = find(v, mv);
           child = reinterpret_cast<node*>(child_pointers[idx]);
@@ -509,7 +507,7 @@ class dynamic_tree {
       root->items[1] = b_child->items[0];
       return false;
     }
-    root->template balance<child_is_leaf, false>(idx);
+    root->template balance<child_is_leaf, false>(idx, max_value_);
     return false;
   }
 
@@ -662,7 +660,7 @@ class dynamic_tree {
         if (i == 1 && i_nd->child_pointers[2] == nullptr) [[unlikely]] {
           i_nd->template split_child<false>(idx, max_value_);
         } else {
-          i_nd->template balance<false, true>(idx);
+          i_nd->template balance<false, true>(idx, max_value_);
         }
         idx = i_nd->find(v, max_value_);
         child_node = reinterpret_cast<node*>(i_nd->child_pointers[idx]);
@@ -678,7 +676,7 @@ class dynamic_tree {
       if (levels_ == 1 && i_nd->child_pointers[2] == nullptr) [[unlikely]] {
         i_nd->template split_child<true>(idx, max_value_);
       } else {
-        i_nd->template balance<true, true>(idx);
+        i_nd->template balance<true, true>(idx, max_value_);
       }
       idx = i_nd->find(v, max_value_);
       leaf = reinterpret_cast<leaf_t*>(i_nd->child_pointers[idx]);
@@ -730,7 +728,7 @@ class dynamic_tree {
 };
 }  // namespace internal
 
-template <class T, bool allow_duplicates = false, uint16_t block_size = 64>
+template <class T, bool allow_duplicates = false, uint16_t block_size = 64, class searcher = internal::auto_search<T, block_size>>
 class dynamic_set {
   class leaf {
     uint16_t size_;
@@ -750,7 +748,7 @@ class dynamic_set {
       if (q == mv) [[unlikely]] {
         return size_ > 0 ? size_ - 1 : 0;
       }
-      return internal::search(items, q);
+      return searcher::search(items.data(), q);
     }
 
     bool is_full() const { return size_ == block_size; }
@@ -802,8 +800,7 @@ class dynamic_set {
 
     void four_way_split(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
                         leaf* r_leaf, uint16_t r_size, leaf* new_leaf,
-                        uint16_t total) {
-      const T mv = new_leaf->items[0];
+                        uint16_t total, const T mv) {
       uint16_t suf_size = total / 2;
       uint16_t pred_size = total - suf_size;
 
@@ -1018,11 +1015,11 @@ class dynamic_set {
   bool empty() const { return size_ == 0; }
 };
 
-template <class T, uint16_t block_size = 64>
-using dynamic_multiset = dynamic_set<T, true, block_size>;
+template <class T, uint16_t block_size = 64, class searcher = internal::auto_search<T, block_size>>
+using dynamic_multiset = dynamic_set<T, true, block_size, searcher>;
 
 template <class K, class V, bool allow_duplicates = false,
-          uint16_t block_size = 64>
+          uint16_t block_size = 64, class searcher = internal::auto_search<K, block_size>>
 class dynamic_map {
   class leaf {
     uint16_t size_;
@@ -1043,7 +1040,7 @@ class dynamic_map {
       if (q == mv) [[unlikely]] {
         return size_ > 0 ? size_ - 1 : 0;
       }
-      return internal::search(items, q);
+      return searcher::search(items.data(), q);
     }
 
     bool is_full() const { return size_ == block_size; }
@@ -1098,8 +1095,7 @@ class dynamic_map {
 
     void four_way_split(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
                         leaf* r_leaf, uint16_t r_size, leaf* new_leaf,
-                        uint16_t total) {
-      const K mv = new_leaf->items[0];
+                        uint16_t total, const K mv) {
       uint16_t suf_size = total / 2;
       uint16_t pred_size = total - suf_size;
 
@@ -1338,7 +1334,7 @@ class dynamic_map {
   bool empty() const { return size_ == 0; }
 };
 
-template <class K, class V, uint16_t block_size = 64>
-using dynamic_multimap = dynamic_map<K, V, true, block_size>;
+template <class K, class V, uint16_t block_size = 64, class searcher = internal::auto_search<K, block_size>>
+using dynamic_multimap = dynamic_map<K, V, true, block_size, searcher>;
 
 }  // namespace bt

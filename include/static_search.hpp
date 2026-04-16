@@ -16,7 +16,8 @@
 
 namespace bt {
 
-template <class T, uint16_t block_size = 8>
+template <class T, uint16_t block_size = 8,
+          class searcher = internal::auto_search<T, block_size>>
 class static_set {
  private:
   static_assert(__builtin_popcountll(block_size) == 1);
@@ -29,7 +30,7 @@ class static_set {
 
     node() {}
 
-    size_t find(T q) const { return internal::search(elements, q); }
+    size_t find(T q) const { return searcher::search(elements.data(), q); }
   };
 
   T max_value_;
@@ -107,8 +108,7 @@ class static_set {
   static_set(std::vector<T> const& vec, const T& max_value)
       : static_set(vec.data(), vec.size(), max_value) {}
 
-  static_set(std::vector<T> const& vec)
-      : static_set(vec.data(), vec.size()) {}
+  static_set(std::vector<T> const& vec) : static_set(vec.data(), vec.size()) {}
 
   ~static_set() {
     if (nodes_ != nullptr) {
@@ -189,7 +189,6 @@ class static_set {
         const constexpr size_t tot_bytes = sizeof(node) * block_size;
         uint8_t const* byte_data =
             reinterpret_cast<uint8_t const*>(nodes_ + (n_idx * block_size + 1));
-
         for (size_t c_idx = 0; c_idx < tot_bytes; c_idx += CACHE_LINE) {
           __builtin_prefetch(byte_data + c_idx);
         }

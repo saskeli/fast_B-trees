@@ -39,6 +39,7 @@
 test/test
 test/cover
 bf_testing
+bench
 
 # debug information files
 *.dwo
@@ -48,3 +49,9 @@ bf_testing
 
 # Code test coverage
 coverage/
+
+# Benchmark results
+*.txt
+
+# Jupyter
+.ipynb_checkpoints

@@ -1,5 +1,6 @@
 CFLAGS=-march=native -std=c++23 -Wall -Wextra -Wshadow -pedantic
-
+BENCH=-isystem benchmark/include -Lbenchmark/build/src -lbenchmark -lpthread
+CMAKE_OPT=-DBENCHMARK_DOWNLOAD_DEPENDENCIES=on -DCMAKE_BUILD_TYPE=Release
 HEADERS=include/static_search.hpp include/internal.hpp include/dynamic_search.hpp
 
 TEST_HEADERS=test/test.cpp test/test_static_set.hpp test/test_static_map.hpp \
@@ -12,6 +13,9 @@ CL=$(shell getconf LEVEL1_DCACHE_LINESIZE)
 
 bf_testing: bf_testing.cpp $(HEADERS) test/util.hpp
 	g++ $(CFLAGS) -Ofast -DCACHE_LINE=$(CL) bf_testing.cpp -o bf_testing
+
+bench: bench.cpp $(HEADERS) benchmark/build/lib/libgtest.a
+	g++ $(CFLAGS) -DNDEBUG -DDEPENDENCE_INSERTION -Ofast bench.cpp $(BENCH) -o bench
 
 test/test: googletest/build/lib/libgtest_main.a $(TEST_HEADERS)
 	g++ $(CFLAGS) -g -DCACHE_LINE=$(CL) test/test.cpp -o test/test -lgtest_main -lgtest
@@ -27,6 +31,14 @@ googletest/build/lib/libgtest_main.a: | googletest/googletest
 
 googletest/googletest:
 	git submodule update --init
+
+benchmark/include:
+	git submodule update --init
+
+benchmark/build/lib/libgtest.a: | benchmark/include
+	mkdir -p benchmark/build
+	(cd benchmark; cmake $(CMAKE_OPT) -S . -B "build")
+	(cd benchmark; cmake --build "build" --config Release)
 
 cover: googletest/build/lib/libgtest_main.a $(TEST_HEADERS) test/cover | coverage
 	test/cover
