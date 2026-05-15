@@ -102,11 +102,25 @@ TEST(DynamicMap, Medium) {
   bt::dynamic_map<int, unsigned int> map;
   std::vector<int> k_vec;
   std::vector<unsigned int> v_vec;
+  uint64_t v_tot = 0;
   for (int i = 0; i < 100; ++i) {
     v_vec.push_back(i);
+    v_tot += i;
     k_vec.push_back(i * i);
     map.insert(i * i, i);
   }
+  auto k_p = k_vec.begin();
+  auto v_p = v_vec.begin();
+  uint64_t v_sum = 0;
+  for (auto m_p : map) {
+    ASSERT_EQ(m_p.first, *k_p);
+    ASSERT_EQ(m_p.second, *v_p);
+    v_sum += m_p.second;
+    ++k_p;
+    ++v_p;
+  }
+  ASSERT_EQ(v_tot, v_sum);
+
 
   for (int i = 0; i <= 99 * 99; ++i) {
     ASSERT_EQ(map.contains_key(i),
@@ -124,6 +138,7 @@ TEST(DynamicMap, Medium) {
       ASSERT_EQ(*map.predecessor(q), p);
       if (i < 99) {
         p = {next, i + 1};
+        //std::cerr << q << std::endl;
         ASSERT_EQ(*map.upper_bound(q), p);
       } else {
         ASSERT_EQ(map.upper_bound(q), e);

@@ -14,7 +14,8 @@
 
 namespace bt {
 namespace internal {
-template <class T, class leaf_t, uint16_t block_size, class searcher = internal::auto_search<T, block_size>>
+template <class T, class leaf_t, uint16_t block_size,
+          class searcher = internal::auto_search<T, block_size>>
 class dynamic_tree {
   class node {
     template <uint16_t b = block_size>
@@ -314,39 +315,41 @@ class dynamic_tree {
 
   class bt_iterator {
    public:
-    std::array<const node*, internal::max_levels<block_size>()> node_stack_;
-    std::array<uint16_t, internal::max_levels<block_size>()> idx_stack_;
     const leaf_t* current_leaf_;
     uint16_t current_idx_;
-    uint16_t levels_;
 
     bt_iterator(const bt_iterator& other)
-        : node_stack_(other.node_stack_),
-          idx_stack_(other.idx_stack_),
-          current_leaf_(other.current_leaf_),
-          current_idx_(other.current_idx_),
-          levels_(other.levels_) {}
+        : current_leaf_(other.current_leaf_),
+          current_idx_(other.current_idx_) {}
 
-    bt_iterator(uint16_t levels) : levels_(levels) {}
+    bt_iterator() : current_idx_(nullptr), current_idx_(0) {}
 
     bt_iterator(const node* root, uint16_t levels)
-        : current_leaf_(nullptr), current_idx_(0), levels_(levels) {
-      if (root == nullptr) {
+        : current_leaf_(nullptr), current_idx_(0) {
+      if (root == nullptr) [[unlikely]] {
         return;
       }
       const node* nd = root;
-      for (uint16_t i = 0; i < levels_; ++i) {
-        node_stack_[i] = nd;
-        idx_stack_[i] = 0;
+      for (uint16_t i = 0; i < levels; ++i) {
         nd = reinterpret_cast<const node*>(nd->child_pointers[0]);
       }
       current_leaf_ = reinterpret_cast<const leaf_t*>(nd);
-      current_idx_ = 0;
     }
 
-    bt_iterator(const leaf_t* leaf)
-        : current_leaf_(leaf), current_idx_(0), levels_(0) {
+    bt_iterator(const leaf_t* leaf, uint16_t idx = 0) : current_leaf_(leaf), current_idx_(idx) {
       return;
+    }
+
+    static bt_iterator end(const node* root, uint16_t levels) {
+      if (root == nullptr) [[unlikely]] {
+        return {nullptr};
+      }
+      const node* nd = root;
+      for (uint16_t i = 0; i < levels; ++i) {
+        nd = reinterpret_cast<const node*>(nd->child_pointers[nd->size() - 1]);
+      }
+      const leaf_t* lefa = reinterpret_cast<const leaf_t*>(nd);
+      return {lefa, lefa->size()};
     }
 
     bt_iterator& operator++() {
@@ -354,30 +357,10 @@ class dynamic_tree {
       if (current_idx_ < current_leaf_->size()) [[likely]] {
         return *this;
       }
-      current_leaf_ = nullptr;
-      current_idx_ = 0;
-      uint16_t local_idx = levels_ - 1;
-      for (; local_idx < levels_; --local_idx) {
-        uint16_t idx = idx_stack_[local_idx] + 1;
-        if (idx < block_size &&
-            node_stack_[local_idx]->child_pointers[idx] != nullptr) {
-          idx_stack_[local_idx] = idx;
-          break;
-        }
-      }
-      if (local_idx > levels_) {
+      if (current_leaf_->right_sibling() == nullptr) [[unlikely]] {
         return *this;
       }
-      for (++local_idx; local_idx < levels_; ++local_idx) {
-        const node* next_node = reinterpret_cast<const node*>(
-            node_stack_[local_idx - 1]
-                ->child_pointers[idx_stack_[local_idx - 1]]);
-        node_stack_[local_idx] = next_node;
-        idx_stack_[local_idx] = 0;
-      }
-      --local_idx;
-      current_leaf_ = reinterpret_cast<const leaf_t*>(
-          node_stack_[local_idx]->child_pointers[idx_stack_[local_idx]]);
+      current_leaf_ = current_leaf_->right_sibling();
       current_idx_ = 0;
       return *this;
     }
@@ -387,29 +370,7 @@ class dynamic_tree {
       if (current_idx_ < block_size) {
         return *this;
       }
-      current_leaf_ = nullptr;
-      current_idx_ = 0;
-      uint16_t local_idx = levels_ - 1;
-      for (; local_idx < levels_; --local_idx) {
-        uint16_t idx = idx_stack_[local_idx] - 1;
-        if (idx < block_size) {
-          idx_stack_[local_idx] = idx;
-          break;
-        }
-      }
-      if (local_idx > levels_) {
-        return *this;
-      }
-      for (++local_idx; local_idx < levels_; ++local_idx) {
-        const node* next_node = reinterpret_cast<const node*>(
-            node_stack_[local_idx - 1]
-                ->child_pointers[idx_stack_[local_idx - 1]]);
-        node_stack_[local_idx] = next_node;
-        idx_stack_[local_idx] = next_node->size() - 1;
-      }
-      --local_idx;
-      current_leaf_ = reinterpret_cast<const leaf_t*>(
-          node_stack_[local_idx]->child_pointers[idx_stack_[local_idx]]);
+      current_leaf_ = current_leaf_->left_sibling();
       current_idx_ = current_leaf_->size() - 1;
       return *this;
     }
@@ -445,10 +406,7 @@ class dynamic_tree {
     }
 
     bool operator==(const bt_iterator& rhs) const {
-      if (current_leaf_ != rhs.current_leaf_) {
-        return false;
-      }
-      return (current_idx_ == rhs.current_idx_);
+      return current_leaf_ == rhs.current_leaf_ && current_idx_ == rhs.current_idx_;
     }
 
     bool operator!=(const bt_iterator& rhs) const { return !(*this == rhs); }
@@ -573,7 +531,13 @@ class dynamic_tree {
     return {reinterpret_cast<const node*>(root_), levels_};
   }
 
-  bt_iterator end() const { return {nullptr, levels_}; }
+  bt_iterator end() const { 
+    if (levels_ == 0) {
+      const leaf_t* lefa = reinterpret_cast<const leaf_t*>(root_);
+      return {lefa, lefa->size()};
+    }
+    return bt_iterator::end(reinterpret_cast<const node*>(root_), levels_); 
+  }
 
   bool read_access(const T& q, typename leaf_t::find_return_t& out) const {
     const void* nd = root_;
@@ -591,24 +555,26 @@ class dynamic_tree {
     return true;
   }
 
+  const T& min_val() const {
+    if (levels_ == 0) {
+      return reinterpret_cast<const leaf_t*>(root_)->items[0];
+    }
+    return reinterpret_cast<const node*>(root_)->items[0];
+  }
+
   bt_iterator predecessor(const T& v) const {
-    bt_iterator ret(levels_);
+    if (min_val() > v) {
+      return end();
+    }
     const void* nd = root_;
     for (uint16_t i = 0; i < levels_; ++i) {
       const node* n_nd = reinterpret_cast<const node*>(nd);
       auto idx = n_nd->find(v, max_value_);
-      ret.node_stack_[i] = n_nd;
-      ret.idx_stack_[i] = idx;
       nd = n_nd->child_pointers[idx];
     }
     const leaf_t* leaf = reinterpret_cast<const leaf_t*>(nd);
     auto idx = leaf->find(v, max_value_);
-    if (leaf->items[idx] > v) {
-      return end();
-    }
-    ret.current_leaf_ = leaf;
-    ret.current_idx_ = idx;
-    return ret;
+    return {leaf, idx};
   }
 
   bt_iterator lower_bound(const T& q) const {
@@ -728,9 +694,12 @@ class dynamic_tree {
 };
 }  // namespace internal
 
-template <class T, bool allow_duplicates = false, uint16_t block_size = 64, class searcher = internal::auto_search<T, block_size>>
+template <class T, bool allow_duplicates = false, uint16_t block_size = 64,
+          class searcher = internal::auto_search<T, block_size>>
 class dynamic_set {
   class leaf {
+    leaf* left_sibling_;
+    leaf* right_sibling_;
     uint16_t size_;
 
    public:
@@ -740,7 +709,19 @@ class dynamic_set {
     static constexpr bool leaf_allows_duplicates() { return allow_duplicates; }
     std::array<T, block_size> items;
 
-    leaf(const T& mv) : size_(0) { items.fill(mv); }
+    leaf(const T& mv)
+        : left_sibling_(nullptr), right_sibling_(nullptr), size_(0) {
+      items.fill(mv);
+    }
+
+    leaf(const T& mv, leaf* left_sibling, leaf* right_sibling)
+        : left_sibling_(left_sibling), right_sibling_(right_sibling), size_(0) {
+      items.fill(mv);
+    }
+
+    const leaf* left_sibling() const { return left_sibling_; }
+
+    const leaf* right_sibling() const { return right_sibling_; }
 
     uint16_t size() const { return size_; }
 
@@ -758,7 +739,8 @@ class dynamic_set {
     find_return_t get(uint16_t idx) const { return items[idx]; }
 
     leaf* split(const T& mv) {
-      leaf* new_leaf = new leaf(mv);
+      leaf* new_leaf = new leaf(mv, this, right_sibling_);
+      right_sibling_ = new_leaf;
       for (uint16_t i = 0; i < block_size / 2; ++i) {
         uint16_t src_idx = i + block_size / 2;
         new_leaf->items[i] = items[src_idx];
@@ -806,6 +788,11 @@ class dynamic_set {
 
       uint16_t copy_count = suf_size / 2;
       uint16_t offset = r_size - copy_count;
+
+      new_leaf->left_sibling_ = r_leaf;
+      new_leaf->right_sibling_ = r_leaf->right_sibling_;
+      r_leaf->right_sibling_ = new_leaf;
+
       for (uint16_t i = 0; i < copy_count; ++i) {
         new_leaf->items[i] = r_leaf->items[offset + i];
         r_leaf->items[offset + i] = mv;
@@ -839,6 +826,8 @@ class dynamic_set {
         r_leaf->items[i] = mv;
       }
       m_leaf->size_ += r_size;
+
+      m_leaf->right_sibling_ = r_leaf->right_sibling_;
     }
 
     void three_way_balance(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
@@ -926,6 +915,7 @@ class dynamic_set {
         items[size + i] = other->items[i];
       }
       size_ += other_size;
+      right_sibling_ = other->right_sibling_;
       delete (other);
     }
   };
@@ -1015,13 +1005,17 @@ class dynamic_set {
   bool empty() const { return size_ == 0; }
 };
 
-template <class T, uint16_t block_size = 64, class searcher = internal::auto_search<T, block_size>>
+template <class T, uint16_t block_size = 64,
+          class searcher = internal::auto_search<T, block_size>>
 using dynamic_multiset = dynamic_set<T, true, block_size, searcher>;
 
 template <class K, class V, bool allow_duplicates = false,
-          uint16_t block_size = 64, class searcher = internal::auto_search<K, block_size>>
+          uint16_t block_size = 64,
+          class searcher = internal::auto_search<K, block_size>>
 class dynamic_map {
   class leaf {
+    leaf* left_sibling_;
+    leaf* right_sibling_;
     uint16_t size_;
 
    public:
@@ -1032,9 +1026,21 @@ class dynamic_map {
     std::array<K, block_size> items;
     std::array<V, block_size> values;
 
-    leaf(const K& mv) : size_(0) { items.fill(mv); }
+    leaf(const K& mv, leaf* left_sibling = nullptr,
+         leaf* right_sibling = nullptr)
+        : left_sibling_(left_sibling), right_sibling_(right_sibling), size_(0) {
+      items.fill(mv);
+    }
 
     uint16_t size() const { return size_; }
+
+    const leaf* left_sibling() const {
+      return left_sibling_;
+    }
+
+    const leaf* right_sibling() const {
+      return right_sibling_;
+    }
 
     uint16_t find(const K& q, const K& mv) const {
       if (q == mv) [[unlikely]] {
@@ -1050,7 +1056,8 @@ class dynamic_map {
     find_return_t get(uint16_t idx) const { return {items[idx], values[idx]}; }
 
     leaf* split(const K& mv) {
-      leaf* new_leaf = new leaf(mv);
+      leaf* new_leaf = new leaf(mv, this, right_sibling_);
+      right_sibling_ = new_leaf;
       for (uint16_t i = 0; i < block_size / 2; ++i) {
         uint16_t src_idx = i + block_size / 2;
         new_leaf->items[i] = items[src_idx];
@@ -1101,6 +1108,11 @@ class dynamic_map {
 
       uint16_t copy_count = suf_size / 2;
       uint16_t offset = r_size - copy_count;
+
+      new_leaf->left_sibling_ = r_leaf;
+      new_leaf->right_sibling_ = r_leaf->right_sibling_;
+      r_leaf->right_sibling_ = new_leaf;
+
       for (uint16_t i = 0; i < copy_count; ++i) {
         new_leaf->items[i] = r_leaf->items[offset + i];
         r_leaf->items[offset + i] = mv;
@@ -1136,6 +1148,8 @@ class dynamic_map {
         m_leaf->values[m_size + i] = r_leaf->values[i];
       }
       m_leaf->size_ += r_size;
+
+      m_leaf->right_sibling_ = r_leaf->right_sibling_;
     }
 
     void three_way_balance(uint16_t l_size, leaf* m_leaf, uint16_t m_size,
@@ -1228,6 +1242,7 @@ class dynamic_map {
         values[size + i] = other->values[i];
       }
       size_ += other_size;
+      right_sibling_ = other->right_sibling_;
       delete (other);
     }
   };
@@ -1334,7 +1349,8 @@ class dynamic_map {
   bool empty() const { return size_ == 0; }
 };
 
-template <class K, class V, uint16_t block_size = 64, class searcher = internal::auto_search<K, block_size>>
+template <class K, class V, uint16_t block_size = 64,
+          class searcher = internal::auto_search<K, block_size>>
 using dynamic_multimap = dynamic_map<K, V, true, block_size, searcher>;
 
 }  // namespace bt
