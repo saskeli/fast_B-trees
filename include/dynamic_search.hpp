@@ -932,12 +932,14 @@ class dynamic_set {
   dynamic_set() : dynamic_set(internal::max_val<T>()) {}
 
   dynamic_set(dynamic_set&& rhs) {
-    b_tree_ = std::exchange(rhs.b_tree_, {internal::max_val<T>()});
+    T mv = internal::max_val<T>();
+    b_tree_ = std::exchange(rhs.b_tree_, {mv});
     size_ = std::exchange(rhs.size_, 0);
   }
 
   dynamic_set& operator=(dynamic_set&& rhs) {
-    b_tree_ = std::exchange(rhs.b_tree_, {internal::max_val<T>()});
+    T mv = internal::max_val<T>();
+    b_tree_ = std::exchange(rhs.b_tree_, {mv});
     size_ = std::exchange(rhs.size_, 0);
   }
 
@@ -1259,12 +1261,14 @@ class dynamic_map {
   dynamic_map() : dynamic_map(internal::max_val<K>()) {}
 
   dynamic_map(dynamic_map&& rhs) {
-    b_tree_ = std::exchange(rhs.b_tree_, {internal::max_val<K>()});
+    K mv = internal::max_val<K>();
+    b_tree_ = std::exchange(rhs.b_tree_, {mv});
     size_ = std::exchange(rhs.size_, 0);
   }
 
   dynamic_map& operator=(dynamic_map&& rhs) {
-    b_tree_ = std::exchange(rhs.b_tree_, {internal::max_val<K>()});
+    K mv = internal::max_val<K>();
+    b_tree_ = std::exchange(rhs.b_tree_, {mv});
     size_ = std::exchange(rhs.size_, 0);
   }
 
