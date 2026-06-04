@@ -931,9 +931,8 @@ class dynamic_set {
 
   dynamic_set() : dynamic_set(internal::max_val<T>()) {}
 
-  dynamic_set(dynamic_set&& rhs) {
-    T mv = internal::max_val<T>();
-    b_tree_ = std::exchange(rhs.b_tree_, {mv});
+  dynamic_set(dynamic_set&& rhs) : b_tree_(rhs.b_tree_.max_value_) {
+    b_tree_ = std::exchange(rhs.b_tree_, b_tree_);
     size_ = std::exchange(rhs.size_, 0);
   }
 
