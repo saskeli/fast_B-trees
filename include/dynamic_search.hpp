@@ -955,9 +955,11 @@ class dynamic_set {
 
   auto end() const { return b_tree_.end(); }
 
-  void insert(const T& v) {
+  bool insert(const T& v) {
     auto bla = b_tree_.insert(v);
-    size_ += bla != nullptr;
+    bool ret = bla != nullptr;
+    size_ += ret;
+    return ret;
   }
 
   bool remove(const T& v) {
@@ -1283,16 +1285,17 @@ class dynamic_map {
 
   auto end() const { return b_tree_.end(); }
 
-  void insert(const K& k, const V& v) {
+  bool insert(const K& k, const V& v) {
     auto bla = b_tree_.insert(k);
     if (bla == nullptr) {
-      return;
+      return false;
     }
     *bla = v;
     ++size_;
+    return true;
   }
 
-  void insert(const std::pair<K, V>& p) { insert(p.first, p.second); }
+  bool insert(const std::pair<K, V>& p) { return insert(p.first, p.second); }
 
   bool remove(const K& k) {
     if (size_ == 0) [[unlikely]] {
