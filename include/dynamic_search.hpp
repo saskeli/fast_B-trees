@@ -1263,7 +1263,7 @@ class dynamic_map {
 
   dynamic_map() : dynamic_map(internal::max_val<K>()) {}
 
-  dynamic_map(dynamic_map&& rhs) b_tree_(rhs.b_tree_.limit()) {
+  dynamic_map(dynamic_map&& rhs) : b_tree_(rhs.b_tree_.limit()) {
     b_tree_ = std::exchange(rhs.b_tree_, b_tree_);
     size_ = std::exchange(rhs.size_, 0);
   }
