@@ -137,10 +137,6 @@ constexpr T max_val() {
   } else {
     return T::max_val();
   }
-  static_assert(std::numeric_limits<T>::is_specialized,
-                "For non-numeric (non-trivial) types, static T::max_val() "
-                "needs to be defined or max_val passed to constructor and a "
-                "total order must be provided.");
 }
 
 template <uint64_t block_size>
