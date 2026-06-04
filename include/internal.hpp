@@ -129,19 +129,18 @@ struct auto_search {
 
 template <class T>
 constexpr T max_val() {
-  if constexpr (not std::numeric_limits<T>::is_specialized) {
-    if constexpr (requires(T a) { T::max_val(); }) {
-      return T::max_val();
+  if constexpr (std::numeric_limits<T>::is_specialized) {
+    if constexpr (std::is_floating_point<T>::value) {
+      return std::numeric_limits<T>::infinity();
     }
-    static_assert(std::numeric_limits<T>::is_specialized,
-                  "For non-numeric (non-trivial) types, static T::max_val() "
-                  "needs to be defined or max_val passed to constructor and a "
-                  "total order must be provided.");
+    return std::numeric_limits<T>::max();
+  } else {
+    return T::max_val();
   }
-  if constexpr (std::is_floating_point<T>::value) {
-    return std::numeric_limits<T>::infinity();
-  }
-  return std::numeric_limits<T>::max();
+  static_assert(std::numeric_limits<T>::is_specialized,
+                "For non-numeric (non-trivial) types, static T::max_val() "
+                "needs to be defined or max_val passed to constructor and a "
+                "total order must be provided.");
 }
 
 template <uint64_t block_size>
